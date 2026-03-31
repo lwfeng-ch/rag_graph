@@ -1,0 +1,82 @@
+name: Feature Request
+description: Suggest a new feature for this project
+title: "[Feature] "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    id: summary
+    attributes:
+      label: Summary
+      description: |
+        Briefly describe the feature you would like
+      placeholder: |
+        A clear and concise summary of the proposed feature...
+    validations:
+      required: true
+
+  - type: markdown
+    id: motivation
+    attributes:
+      label: Motivation
+      description: |
+        Describe the problem or limitation that this feature would solve
+        
+        **Who would benefit from this feature?**
+        
+        **What use cases would it enable?**
+      placeholder: |
+        Explain the motivation for this feature request...
+    validations:
+      required: true
+
+  - type: markdown
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: |
+        Describe the solution you would like
+        
+        **How should it work?**
+        
+        **Any alternative solutions considered?**
+      placeholder: |
+        Describe your proposed solution...
+    validations:
+      required: false
+
+  - type: markdown
+    id: mockups
+    attributes:
+      label: Mockups / Examples
+      description: |
+        If applicable, add mockups, diagrams, or examples to illustrate the feature
+      placeholder: |
+        Add any relevant mockups or examples...
+    validations:
+      required: false
+
+  - type: markdown
+    id: code-samples
+    attributes:
+      label: Code Examples
+      description: |
+        If applicable, add code examples or pseudocode
+      placeholder: |
+        ```python
+        # Example code...
+        ```
+    validations:
+      required: false
+
+  - type: markdown
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have checked if this feature already exists
+          required: true
+        - label: I have checked the roadmap
+          required: true
+        - label: I understand this is a suggestion, not a demand
+          required: true
