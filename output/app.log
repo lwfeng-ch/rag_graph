@@ -5550,3 +5550,396 @@ id='chatcmpl-29b9217feed64593b64ebd025f84dee6' object='chat.completion' created=
 2026-03-19 16:17:43,388 - __main__ - INFO - Streaming chunk from generate: 定制建议。
 2026-03-19 16:17:43,408 - __main__ - INFO - Streaming chunk from generate: 
 2026-03-19 16:17:43,412 - __main__ - INFO - Streaming chunk from generate: 
+2026-03-31 10:20:59,519 - __main__ - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 10:20:59,531 - __main__ - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 10:20:59,533 - __main__ - INFO - Initialized ToolConfig with tools: {'multiply', 'retrieve'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 10:21:03,865 - __main__ - ERROR - Failed to setup PostgresSaver or PostgresStore: connection to server at "localhost" (::1), port 5433 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5433 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+
+2026-03-31 10:21:03,867 - __main__ - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 10:21:03,874 - __main__ - INFO - Using LangChain v1 middleware-enhanced agent (in-memory)
+2026-03-31 10:21:03,950 - __main__ - ERROR - Unexpected error: PIIMiddleware.__init__() got an unexpected keyword argument 'patterns'
+2026-03-31 19:38:18,674 - __main__ - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 19:38:18,687 - __main__ - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 19:38:18,689 - __main__ - INFO - Initialized ToolConfig with tools: {'retrieve', 'multiply'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 19:38:19,240 - __main__ - ERROR - Failed to setup PostgresSaver or PostgresStore: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+2026-03-31 19:38:19,242 - __main__ - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 19:44:45,480 - __main__ - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 19:44:45,489 - __main__ - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 19:44:45,492 - __main__ - INFO - Initialized ToolConfig with tools: {'retrieve', 'multiply'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 19:44:45,920 - __main__ - ERROR - Failed to setup PostgresSaver or PostgresStore: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+2026-03-31 19:44:45,922 - __main__ - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 19:45:58,825 - __main__ - INFO - Agent processing user query
+2026-03-31 19:45:58,827 - __main__ - INFO - agent question:content='deepseek 的数学能力怎么样' additional_kwargs={} response_metadata={} id='62333892-98ab-4083-bd55-c7400948d7f9'
+2026-03-31 19:45:58,834 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_agent.txt
+2026-03-31 19:46:35,638 - __main__ - INFO - Agent processing user query
+2026-03-31 19:46:35,640 - __main__ - INFO - agent question:content='张三九最近一次就诊是什么病，什么时候' additional_kwargs={} response_metadata={} id='81183b69-9070-4ece-92ce-b9be08031cf2'
+2026-03-31 19:46:35,646 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 19:46:36,947 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 19:46:36,949 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 19:46:37,325 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 19:46:37,328 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 19:46:37,330 - __main__ - INFO - Grading documents for relevance
+2026-03-31 19:46:37,334 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_grade.txt
+2026-03-31 19:46:38,009 - __main__ - INFO - Document relevance score: no
+2026-03-31 19:46:38,011 - __main__ - INFO - Routing based on relevance_score: no, rewrite_count: 0
+2026-03-31 19:46:38,012 - __main__ - INFO - Documents are not relevant or scoring failed, proceeding to rewrite
+2026-03-31 19:46:38,016 - __main__ - INFO - Rewriting query
+2026-03-31 19:46:38,018 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_rewrite.txt
+2026-03-31 19:46:38,853 - __main__ - INFO - Rewrite count: 1
+2026-03-31 19:46:38,856 - __main__ - INFO - Agent processing user query
+2026-03-31 19:46:38,858 - __main__ - INFO - agent question:content='张三九最近一次就诊的诊断结果是什么？就诊日期是哪一天？' additional_kwargs={'refusal': None} response_metadata={'token_usage': {'completion_tokens': 17, 'prompt_tokens': 69, 'total_tokens': 86, 'completion_tokens_details': None, 'prompt_tokens_details': {'audio_tokens': None, 'cached_tokens': 0}}, 'model_name': 'qwen-plus', 'system_fingerprint': None, 'id': 'chatcmpl-b72327fa-0220-960a-937d-c084a3b8d292', 'service_tier': None, 'finish_reason': 'stop', 'logprobs': None} id='lc_run--019d43b7-9545-7c52-ab30-70aee83c4986-0' tool_calls=[] invalid_tool_calls=[] usage_metadata={'input_tokens': 69, 'output_tokens': 17, 'total_tokens': 86, 'input_token_details': {'cache_read': 0}, 'output_token_details': {}}
+2026-03-31 19:46:38,864 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 19:46:39,976 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 19:46:39,978 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 19:46:40,178 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 19:46:40,180 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 19:46:40,183 - __main__ - INFO - Grading documents for relevance
+2026-03-31 19:46:40,184 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_grade.txt
+2026-03-31 19:46:40,965 - __main__ - INFO - Document relevance score: no
+2026-03-31 19:46:40,967 - __main__ - INFO - Routing based on relevance_score: no, rewrite_count: 1
+2026-03-31 19:46:40,969 - __main__ - INFO - Documents are not relevant or scoring failed, proceeding to rewrite
+2026-03-31 19:46:40,973 - __main__ - INFO - Rewriting query
+2026-03-31 19:46:40,974 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_rewrite.txt
+2026-03-31 19:46:41,633 - __main__ - INFO - Rewrite count: 2
+2026-03-31 19:46:41,637 - __main__ - INFO - Agent processing user query
+2026-03-31 19:46:41,638 - __main__ - INFO - agent question:content='张三九最近一次就诊的诊断结果是什么？就诊日期是哪一天？' additional_kwargs={'refusal': None} response_metadata={'token_usage': {'completion_tokens': 17, 'prompt_tokens': 69, 'total_tokens': 86, 'completion_tokens_details': None, 'prompt_tokens_details': {'audio_tokens': None, 'cached_tokens': 0}}, 'model_name': 'qwen-plus', 'system_fingerprint': None, 'id': 'chatcmpl-e212e0d2-bf0b-9a3f-9299-b7a4c7d8284c', 'service_tier': None, 'finish_reason': 'stop', 'logprobs': None} id='lc_run--019d43b7-a0d2-7452-9fcd-1ef0a29ca91e-0' tool_calls=[] invalid_tool_calls=[] usage_metadata={'input_tokens': 69, 'output_tokens': 17, 'total_tokens': 86, 'input_token_details': {'cache_read': 0}, 'output_token_details': {}}
+2026-03-31 19:46:41,644 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 19:46:42,743 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 19:46:42,745 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 19:46:42,915 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 19:46:42,916 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 19:46:42,920 - __main__ - INFO - Grading documents for relevance
+2026-03-31 19:46:42,922 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_grade.txt
+2026-03-31 19:46:43,489 - __main__ - INFO - Document relevance score: no
+2026-03-31 19:46:43,493 - __main__ - INFO - Routing based on relevance_score: no, rewrite_count: 2
+2026-03-31 19:46:43,493 - __main__ - INFO - Documents are not relevant or scoring failed, proceeding to rewrite
+2026-03-31 19:46:43,498 - __main__ - INFO - Rewriting query
+2026-03-31 19:46:43,500 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_rewrite.txt
+2026-03-31 19:46:44,584 - __main__ - INFO - Rewrite count: 3
+2026-03-31 19:46:44,587 - __main__ - INFO - Agent processing user query
+2026-03-31 19:46:44,588 - __main__ - INFO - agent question:content='张三九最近一次就诊的诊断结果是什么？就诊日期是哪一天？' additional_kwargs={'refusal': None} response_metadata={'token_usage': {'completion_tokens': 17, 'prompt_tokens': 69, 'total_tokens': 86, 'completion_tokens_details': None, 'prompt_tokens_details': {'audio_tokens': None, 'cached_tokens': 0}}, 'model_name': 'qwen-plus', 'system_fingerprint': None, 'id': 'chatcmpl-7b0a3311-435d-92de-85b0-7ce5aa2258fe', 'service_tier': None, 'finish_reason': 'stop', 'logprobs': None} id='lc_run--019d43b7-aaaf-7f12-a829-ec4b16c66893-0' tool_calls=[] invalid_tool_calls=[] usage_metadata={'input_tokens': 69, 'output_tokens': 17, 'total_tokens': 86, 'input_token_details': {'cache_read': 0}, 'output_token_details': {}}
+2026-03-31 19:46:44,594 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 19:46:45,964 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 19:46:45,968 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 19:46:46,170 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 19:46:46,174 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 19:46:46,180 - __main__ - INFO - Grading documents for relevance
+2026-03-31 19:46:46,185 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_grade.txt
+2026-03-31 19:46:46,891 - __main__ - INFO - Document relevance score: no
+2026-03-31 19:46:46,893 - __main__ - INFO - Routing based on relevance_score: no, rewrite_count: 3
+2026-03-31 19:46:46,895 - __main__ - INFO - Max rewrite limit reached, proceeding to generate
+2026-03-31 19:46:46,900 - __main__ - INFO - Generating final response
+2026-03-31 19:46:46,902 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_generate.txt
+2026-03-31 20:39:09,915 - __main__ - INFO - Agent processing user query
+2026-03-31 20:39:09,920 - __main__ - INFO - agent question:content='cd d:/items/agent/L1/chapter9/graph_agent_rount/L1-Project-2' additional_kwargs={} response_metadata={} id='3fce95fd-3924-4072-b980-b962fe733032'
+2026-03-31 20:39:09,952 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 20:39:12,764 - __main__ - INFO - Agent processing user query
+2026-03-31 20:39:12,767 - __main__ - INFO - agent question:content='D:/ProgramData/anaconda3/envs/langchain-v1/python.exe d:/items/agent/L1/chapter9/graph_agent_rount/L1-Project-2/vectorSave.py' additional_kwargs={} response_metadata={} id='fdb04b0e-aeb5-468a-9893-48d00108f3d0'
+2026-03-31 20:39:12,776 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 20:40:20,920 - __main__ - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 20:40:20,933 - __main__ - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 20:40:20,935 - __main__ - INFO - Initialized ToolConfig with tools: {'retrieve', 'multiply'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 20:40:21,447 - __main__ - ERROR - Failed to setup PostgresSaver or PostgresStore: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+2026-03-31 20:40:21,450 - __main__ - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 20:40:52,748 - __main__ - INFO - Agent processing user query
+2026-03-31 20:40:52,750 - __main__ - INFO - agent question:content='李四六最近一次就诊的时间和病情' additional_kwargs={} response_metadata={} id='7c9cf673-ff9c-49e1-acdb-38fe3f86bcd9'
+2026-03-31 20:40:52,757 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_agent.txt
+2026-03-31 20:40:53,905 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 20:40:53,907 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 20:40:54,256 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 20:40:54,257 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 20:40:54,261 - __main__ - INFO - Grading documents for relevance
+2026-03-31 20:40:54,262 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_grade.txt
+2026-03-31 20:40:54,922 - __main__ - INFO - Document relevance score: yes
+2026-03-31 20:40:54,924 - __main__ - INFO - Routing based on relevance_score: yes, rewrite_count: 0
+2026-03-31 20:40:54,926 - __main__ - INFO - Documents are relevant, proceeding to generate
+2026-03-31 20:40:54,929 - __main__ - INFO - Generating final response
+2026-03-31 20:40:54,931 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_generate.txt
+2026-03-31 20:59:01,448 - __main__ - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 20:59:01,458 - __main__ - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 20:59:01,460 - __main__ - INFO - Initialized ToolConfig with tools: {'multiply', 'retrieve'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 20:59:01,848 - __main__ - ERROR - Failed to setup PostgresSaver or PostgresStore: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+2026-03-31 20:59:01,850 - __main__ - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 20:59:31,861 - __main__ - INFO - Agent processing user query
+2026-03-31 20:59:31,863 - __main__ - INFO - agent question:content='你好我是王五的朋友李二' additional_kwargs={} response_metadata={} id='5a455fc1-5568-4374-9439-06db04d54c5d'
+2026-03-31 20:59:31,869 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_agent.txt
+2026-03-31 21:00:05,084 - __main__ - INFO - Agent processing user query
+2026-03-31 21:00:05,086 - __main__ - INFO - agent question:content='能告诉我王五的手术史吗' additional_kwargs={} response_metadata={} id='39bd7f45-4fcf-474c-ae44-6b519d676c7e'
+2026-03-31 21:00:05,092 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 21:00:06,212 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 21:00:06,213 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 21:00:06,548 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 21:00:06,550 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 21:00:06,554 - __main__ - INFO - Grading documents for relevance
+2026-03-31 21:00:06,556 - __main__ - DEBUG - Grader LLM temperature set to: 0.0
+2026-03-31 21:00:06,557 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_grade.txt
+2026-03-31 21:00:07,261 - __main__ - INFO - Document relevance score: yes
+2026-03-31 21:00:07,263 - __main__ - INFO - Routing based on relevance_score: yes, rewrite_count: 0
+2026-03-31 21:00:07,265 - __main__ - INFO - Documents are relevant, proceeding to generate
+2026-03-31 21:00:07,268 - __main__ - INFO - Generating final response
+2026-03-31 21:00:07,270 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_generate.txt
+2026-03-31 21:03:14,534 - __main__ - INFO - Agent processing user query
+2026-03-31 21:03:14,535 - __main__ - INFO - agent question:content='医生对王五的叮嘱有哪些，如何让它快速恢复' additional_kwargs={} response_metadata={} id='b74ab482-ad36-464f-ba1c-ea02ffed2091'
+2026-03-31 21:03:14,548 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 21:03:15,684 - __main__ - INFO - Calling tool: retrieve
+2026-03-31 21:03:15,688 - __main__ - INFO - ParallelToolNode processing tool calls
+2026-03-31 21:03:16,014 - __main__ - INFO - Completed 1 tool calls
+2026-03-31 21:03:16,016 - __main__ - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 21:03:16,021 - __main__ - INFO - Grading documents for relevance
+2026-03-31 21:03:16,022 - __main__ - DEBUG - Grader LLM temperature set to: 0.0
+2026-03-31 21:03:16,024 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_grade.txt
+2026-03-31 21:03:16,730 - __main__ - INFO - Document relevance score: yes
+2026-03-31 21:03:16,734 - __main__ - INFO - Routing based on relevance_score: yes, rewrite_count: 0
+2026-03-31 21:03:16,735 - __main__ - INFO - Documents are relevant, proceeding to generate
+2026-03-31 21:03:16,738 - __main__ - INFO - Generating final response
+2026-03-31 21:03:16,741 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_generate.txt
+2026-03-31 21:21:14,215 - __main__ - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 21:21:14,225 - __main__ - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 21:21:14,226 - __main__ - INFO - Initialized ToolConfig with tools: {'retrieve', 'multiply'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 21:21:14,615 - __main__ - ERROR - Failed to setup PostgresSaver or PostgresStore: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+2026-03-31 21:21:14,618 - __main__ - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 21:21:20,215 - __main__ - INFO - Agent processing user query
+2026-03-31 21:21:20,216 - __main__ - INFO - agent question:content='你还记得我吗' additional_kwargs={} response_metadata={} id='84ad0e73-6b6d-4e36-9028-5d929d6d06e3'
+2026-03-31 21:21:20,223 - __main__ - INFO - Loading and caching prompt template from prompts/prompt_template_agent.txt
+2026-03-31 21:21:29,922 - __main__ - INFO - Agent processing user query
+2026-03-31 21:21:29,924 - __main__ - INFO - agent question:content='我是张三九' additional_kwargs={} response_metadata={} id='2ecf4d6c-82cf-4bc5-a096-53fa474b5fbe'
+2026-03-31 21:21:29,930 - __main__ - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 21:52:21,534 - __main__ - INFO - Start the server on port 8012
+2026-03-31 21:52:23,048 - ragAgent_v1 - DEBUG - Tool 'retrieve' routed to 'grade_documents' (retrieval tool)
+2026-03-31 21:52:23,050 - ragAgent_v1 - DEBUG - Tool 'multiply' routed to 'generate' (non-retrieval tool)
+2026-03-31 21:52:23,052 - ragAgent_v1 - INFO - Initialized ToolConfig with tools: {'multiply', 'retrieve'}, routing: {'retrieve': 'grade_documents', 'multiply': 'generate'}
+2026-03-31 21:52:23,354 - ragAgent_v1 - ERROR - Failed to setup PostgresSaver or PostgresStore: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+2026-03-31 21:52:23,356 - ragAgent_v1 - WARNING - Falling back to in-memory storage due to PostgreSQL compatibility issues
+2026-03-31 21:52:26,547 - ragAgent_v1 - INFO - Graph visualization saved as graph.png
+2026-03-31 21:54:56,387 - __main__ - INFO - The user's user_input is: 你好，我是王五的朋友张三九
+2026-03-31 21:54:56,538 - ragAgent_v1 - INFO - Agent processing user query
+2026-03-31 21:54:56,542 - ragAgent_v1 - INFO - agent question:content='你好，我是王五的朋友张三九' additional_kwargs={} response_metadata={} id='c3f73db5-c96e-4a62-ad21-fd953ded95ee'
+2026-03-31 21:54:56,552 - ragAgent_v1 - INFO - Loading and caching prompt template from prompts/prompt_template_agent.txt
+2026-03-31 21:54:57,193 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:54:57,195 - __main__ - INFO - Streaming chunk from agent: 你好
+2026-03-31 21:54:57,216 - __main__ - INFO - Streaming chunk from agent: ，张
+2026-03-31 21:54:57,257 - __main__ - INFO - Streaming chunk from agent: 三九！
+2026-03-31 21:54:57,320 - __main__ - INFO - Streaming chunk from agent: 很高兴认识你
+2026-03-31 21:54:57,453 - __main__ - INFO - Streaming chunk from agent: ，有什么我可以帮你的
+2026-03-31 21:54:57,496 - __main__ - INFO - Streaming chunk from agent: 吗？
+2026-03-31 21:54:57,540 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:54:57,542 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:30,699 - __main__ - INFO - The user's user_input is: 我想要知道王五有哪些要注意的慢性病
+2026-03-31 21:55:30,707 - ragAgent_v1 - INFO - Agent processing user query
+2026-03-31 21:55:30,709 - ragAgent_v1 - INFO - agent question:content='我想要知道王五有哪些要注意的慢性病' additional_kwargs={} response_metadata={} id='677a5766-a8b8-4c80-898d-6691f33807cf'
+2026-03-31 21:55:30,716 - ragAgent_v1 - INFO - Using cached prompt template for prompts/prompt_template_agent.txt
+2026-03-31 21:55:31,630 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:31,632 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:31,736 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:31,833 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:31,835 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:31,840 - __main__ - INFO - Streaming chunk from agent: 
+2026-03-31 21:55:31,843 - ragAgent_v1 - INFO - ParallelToolNode processing tool calls
+2026-03-31 21:55:32,207 - ragAgent_v1 - INFO - Completed 1 tool calls
+2026-03-31 21:55:32,211 - ragAgent_v1 - INFO - Tool retrieve routed to grade_documents based on config
+2026-03-31 21:55:32,215 - ragAgent_v1 - INFO - Grading documents for relevance
+2026-03-31 21:55:32,217 - ragAgent_v1 - DEBUG - Grader LLM temperature set to: 0.0
+2026-03-31 21:55:32,218 - ragAgent_v1 - INFO - Loading and caching prompt template from prompts/prompt_template_grade.txt
+2026-03-31 21:55:33,480 - ragAgent_v1 - INFO - Document relevance score: yes
+2026-03-31 21:55:33,483 - ragAgent_v1 - INFO - Routing based on relevance_score: yes, rewrite_count: 0
+2026-03-31 21:55:33,485 - ragAgent_v1 - INFO - Documents are relevant, proceeding to generate
+2026-03-31 21:55:33,489 - ragAgent_v1 - INFO - Generating final response
+2026-03-31 21:55:33,490 - ragAgent_v1 - INFO - Loading and caching prompt template from prompts/prompt_template_generate.txt
+2026-03-31 21:55:34,223 - __main__ - INFO - Streaming chunk from generate: 
+2026-03-31 21:55:34,225 - __main__ - INFO - Streaming chunk from generate: 根据
+2026-03-31 21:55:34,240 - __main__ - INFO - Streaming chunk from generate: 王五的
+2026-03-31 21:55:34,309 - __main__ - INFO - Streaming chunk from generate: 健康档案，
+2026-03-31 21:55:34,376 - __main__ - INFO - Streaming chunk from generate: 他
+2026-03-31 21:55:34,486 - __main__ - INFO - Streaming chunk from generate: 目前需重点关注以下慢性
+2026-03-31 21:55:34,573 - __main__ - INFO - Streaming chunk from generate: 病及相关风险：
+
+1
+2026-03-31 21:55:34,702 - __main__ - INFO - Streaming chunk from generate: . **高血压**
+2026-03-31 21:55:34,778 - __main__ - INFO - Streaming chunk from generate: （已确诊，
+2026-03-31 21:55:34,879 - __main__ - INFO - Streaming chunk from generate: 正在规范用药）  
+  
+2026-03-31 21:55:34,993 - __main__ - INFO - Streaming chunk from generate:  - 200
+2026-03-31 21:55:35,099 - __main__ - INFO - Streaming chunk from generate: 8年确诊，目前
+2026-03-31 21:55:35,186 - __main__ - INFO - Streaming chunk from generate: 血压控制良好（
+2026-03-31 21:55:35,303 - __main__ - INFO - Streaming chunk from generate: 130/
+2026-03-31 21:55:35,386 - __main__ - INFO - Streaming chunk from generate: 80 mmHg），
+2026-03-31 21:55:35,551 - __main__ - INFO - Streaming chunk from generate: 但已接近正常
+2026-03-31 21:55:35,605 - __main__ - INFO - Streaming chunk from generate: 高值上限（<
+2026-03-31 21:55:35,694 - __main__ - INFO - Streaming chunk from generate: 120/8
+2026-03-31 21:55:35,858 - __main__ - INFO - Streaming chunk from generate: 0为理想，13
+2026-03-31 21:55:35,959 - __main__ - INFO - Streaming chunk from generate: 0/80属
+2026-03-31 21:55:36,067 - __main__ - INFO - Streaming chunk from generate: “正常高值”），
+2026-03-31 21:55:36,226 - __main__ - INFO - Streaming chunk from generate: 需持续规律服
+2026-03-31 21:55:36,287 - __main__ - INFO - Streaming chunk from generate: 药、限盐
+2026-03-31 21:55:36,354 - __main__ - INFO - Streaming chunk from generate: （当前饮食盐
+2026-03-31 21:55:36,483 - __main__ - INFO - Streaming chunk from generate: 分摄入偏高）、
+2026-03-31 21:55:36,575 - __main__ - INFO - Streaming chunk from generate: 定期监测。
+
+2. **
+2026-03-31 21:55:36,702 - __main__ - INFO - Streaming chunk from generate: 高脂血症（
+2026-03-31 21:55:36,795 - __main__ - INFO - Streaming chunk from generate: 血脂异常）**（
+2026-03-31 21:55:36,953 - __main__ - INFO - Streaming chunk from generate: 明确存在，属
+2026-03-31 21:55:37,023 - __main__ - INFO - Streaming chunk from generate: 需干预的慢性代谢
+2026-03-31 21:55:37,081 - __main__ - INFO - Streaming chunk from generate: 问题）  
+  
+2026-03-31 21:55:37,233 - __main__ - INFO - Streaming chunk from generate:  - 最近体检显示
+2026-03-31 21:55:37,322 - __main__ - INFO - Streaming chunk from generate: ：总胆固醇 
+2026-03-31 21:55:37,413 - __main__ - INFO - Streaming chunk from generate: 6.0 mmol
+2026-03-31 21:55:37,540 - __main__ - INFO - Streaming chunk from generate: /L（↑，正常
+2026-03-31 21:55:37,611 - __main__ - INFO - Streaming chunk from generate: ＜5.2
+2026-03-31 21:55:37,696 - __main__ - INFO - Streaming chunk from generate: ）、LDL 3
+2026-03-31 21:55:37,849 - __main__ - INFO - Streaming chunk from generate: .5 mmol/L（
+2026-03-31 21:55:37,960 - __main__ - INFO - Streaming chunk from generate: ↑，理想＜2
+2026-03-31 21:55:38,075 - __main__ - INFO - Streaming chunk from generate: .6）、甘
+2026-03-31 21:55:38,181 - __main__ - INFO - Streaming chunk from generate: 油三酯 1
+2026-03-31 21:55:38,268 - __main__ - INFO - Streaming chunk from generate: .9 mmol/L（
+2026-03-31 21:55:38,420 - __main__ - INFO - Streaming chunk from generate: ↑，正常＜1
+2026-03-31 21:55:38,513 - __main__ - INFO - Streaming chunk from generate: .7）、H
+2026-03-31 21:55:38,597 - __main__ - INFO - Streaming chunk from generate: DL 1.2 mm
+2026-03-31 21:55:38,747 - __main__ - INFO - Streaming chunk from generate: ol/L（尚
+2026-03-31 21:55:38,797 - __main__ - INFO - Streaming chunk from generate: 可，但可
+2026-03-31 21:55:38,905 - __main__ - INFO - Streaming chunk from generate: 进一步提升）。  
+  
+2026-03-31 21:55:39,017 - __main__ - INFO - Streaming chunk from generate:  - 这是心血管疾病
+2026-03-31 21:55:39,176 - __main__ - INFO - Streaming chunk from generate: 的重要可控危险因素，与
+2026-03-31 21:55:39,235 - __main__ - INFO - Streaming chunk from generate: 家族史（父亲
+2026-03-31 21:55:39,324 - __main__ - INFO - Streaming chunk from generate: 冠心病）、
+2026-03-31 21:55:39,451 - __main__ - INFO - Streaming chunk from generate: 轻度脂肪肝
+2026-03-31 21:55:39,543 - __main__ - INFO - Streaming chunk from generate: 、BMI超重
+2026-03-31 21:55:39,611 - __main__ - INFO - Streaming chunk from generate: （26.2
+2026-03-31 21:55:39,747 - __main__ - INFO - Streaming chunk from generate: ）密切相关。
+
+3.
+2026-03-31 21:55:39,873 - __main__ - INFO - Streaming chunk from generate:  **超重 /
+2026-03-31 21:55:39,964 - __main__ - INFO - Streaming chunk from generate:  代谢相关风险（
+2026-03-31 21:55:40,028 - __main__ - INFO - Streaming chunk from generate: 向代谢综合征进展
+2026-03-31 21:55:40,116 - __main__ - INFO - Streaming chunk from generate: 倾向）**  
+
+2026-03-31 21:55:40,227 - __main__ - INFO - Streaming chunk from generate:    - BMI 26
+2026-03-31 21:55:40,380 - __main__ - INFO - Streaming chunk from generate: .2（属“
+2026-03-31 21:55:40,430 - __main__ - INFO - Streaming chunk from generate: 正常高值”
+2026-03-31 21:55:40,557 - __main__ - INFO - Streaming chunk from generate: 上限，接近超
+2026-03-31 21:55:40,673 - __main__ - INFO - Streaming chunk from generate: 重标准24
+2026-03-31 21:55:40,733 - __main__ - INFO - Streaming chunk from generate: –28），
+2026-03-31 21:55:40,820 - __main__ - INFO - Streaming chunk from generate: 腹部脂肪可能增加
+2026-03-31 21:55:40,937 - __main__ - INFO - Streaming chunk from generate: ，已伴轻度脂肪
+2026-03-31 21:55:41,041 - __main__ - INFO - Streaming chunk from generate: 肝、血脂异常，
+2026-03-31 21:55:41,176 - __main__ - INFO - Streaming chunk from generate: 提示存在胰岛素抵抗
+2026-03-31 21:55:41,240 - __main__ - INFO - Streaming chunk from generate: 和代谢综合征前期
+2026-03-31 21:55:41,369 - __main__ - INFO - Streaming chunk from generate: 风险。虽空
+2026-03-31 21:55:41,480 - __main__ - INFO - Streaming chunk from generate: 腹血糖目前正常
+2026-03-31 21:55:41,525 - __main__ - INFO - Streaming chunk from generate: （5.5
+2026-03-31 21:55:41,666 - __main__ - INFO - Streaming chunk from generate:  mmol/L），但需
+2026-03-31 21:55:41,746 - __main__ - INFO - Streaming chunk from generate: 警惕未来糖尿病发生
+2026-03-31 21:55:41,884 - __main__ - INFO - Streaming chunk from generate: （尤其母亲有2
+2026-03-31 21:55:41,964 - __main__ - INFO - Streaming chunk from generate: 型糖尿病家族史）。
+
+
+2026-03-31 21:55:42,123 - __main__ - INFO - Streaming chunk from generate: 4. **非
+2026-03-31 21:55:42,141 - __main__ - INFO - Streaming chunk from generate: 酒精性脂肪性
+2026-03-31 21:55:42,267 - __main__ - INFO - Streaming chunk from generate: 肝病（NA
+2026-03-31 21:55:42,363 - __main__ - INFO - Streaming chunk from generate: FLD）**  
+
+2026-03-31 21:55:42,471 - __main__ - INFO - Streaming chunk from generate:    - 腹部
+2026-03-31 21:55:42,613 - __main__ - INFO - Streaming chunk from generate: 超声确诊“
+2026-03-31 21:55:42,709 - __main__ - INFO - Streaming chunk from generate: 轻度脂肪肝”，与
+2026-03-31 21:55:42,778 - __main__ - INFO - Streaming chunk from generate: 超重、血脂
+2026-03-31 21:55:42,912 - __main__ - INFO - Streaming chunk from generate: 异常、久坐职业
+2026-03-31 21:55:43,021 - __main__ - INFO - Streaming chunk from generate: （银行经理）及
+2026-03-31 21:55:43,109 - __main__ - INFO - Streaming chunk from generate: 饮食结构（高
+2026-03-31 21:55:43,219 - __main__ - INFO - Streaming chunk from generate: 盐、偶多
+2026-03-31 21:55:43,325 - __main__ - INFO - Streaming chunk from generate: 肉类/海鲜）相关
+2026-03-31 21:55:43,397 - __main__ - INFO - Streaming chunk from generate: ，属慢性进行
+2026-03-31 21:55:43,482 - __main__ - INFO - Streaming chunk from generate: 性疾病，需生活方式
+2026-03-31 21:55:43,592 - __main__ - INFO - Streaming chunk from generate: 干预以防进展。
+
+5.
+2026-03-31 21:55:43,746 - __main__ - INFO - Streaming chunk from generate:  **慢性胃病（既
+2026-03-31 21:55:43,856 - __main__ - INFO - Streaming chunk from generate: 往胃溃疡，
+2026-03-31 21:55:43,943 - __main__ - INFO - Streaming chunk from generate: 现为高风险状态
+2026-03-31 21:55:44,079 - __main__ - INFO - Streaming chunk from generate: ）**  
+   - 
+2026-03-31 21:55:44,186 - __main__ - INFO - Streaming chunk from generate: 2012年确诊
+2026-03-31 21:55:44,341 - __main__ - INFO - Streaming chunk from generate: 胃溃疡，虽已控制
+2026-03-31 21:55:44,449 - __main__ - INFO - Streaming chunk from generate: ，但长期服用
+2026-03-31 21:55:44,500 - __main__ - INFO - Streaming chunk from generate: 降压药（
+2026-03-31 21:55:44,645 - __main__ - INFO - Streaming chunk from generate: 部分药物如NS
+2026-03-31 21:55:44,740 - __main__ - INFO - Streaming chunk from generate: AIDs类需谨慎
+2026-03-31 21:55:44,803 - __main__ - INFO - Streaming chunk from generate: ，虽未说明
+2026-03-31 21:55:44,917 - __main__ - INFO - Streaming chunk from generate: 具体降压药种类
+2026-03-31 21:55:45,002 - __main__ - INFO - Streaming chunk from generate: ）、高盐饮食
+2026-03-31 21:55:45,111 - __main__ - INFO - Streaming chunk from generate: 、压力职业（银行
+2026-03-31 21:55:45,248 - __main__ - INFO - Streaming chunk from generate: 经理）、偶饮酒
+2026-03-31 21:55:45,309 - __main__ - INFO - Streaming chunk from generate: 等因素仍构成胃
+2026-03-31 21:55:45,397 - __main__ - INFO - Streaming chunk from generate: 黏膜慢性损伤
+2026-03-31 21:55:45,488 - __main__ - INFO - Streaming chunk from generate: 风险，需持续饮食
+2026-03-31 21:55:45,592 - __main__ - INFO - Streaming chunk from generate: 调理与随访。
+
+
+2026-03-31 21:55:45,703 - __main__ - INFO - Streaming chunk from generate:  其他需
+2026-03-31 21:55:45,821 - __main__ - INFO - Streaming chunk from generate: 长期关注的风险（
+2026-03-31 21:55:45,903 - __main__ - INFO - Streaming chunk from generate: 尚未发病，但家族
+2026-03-31 21:55:46,035 - __main__ - INFO - Streaming chunk from generate: 及指标提示高
+2026-03-31 21:55:46,119 - __main__ - INFO - Streaming chunk from generate: 危）：
+- **
+2026-03-31 21:55:46,231 - __main__ - INFO - Streaming chunk from generate: 2型糖尿病**
+2026-03-31 21:55:46,318 - __main__ - INFO - Streaming chunk from generate: ：母亲患病 +
+2026-03-31 21:55:46,411 - __main__ - INFO - Streaming chunk from generate:  BMI偏高 +
+2026-03-31 21:55:46,475 - __main__ - INFO - Streaming chunk from generate:  脂肪肝
+2026-03-31 21:55:46,606 - __main__ - INFO - Streaming chunk from generate:  → 高危，
+2026-03-31 21:55:46,715 - __main__ - INFO - Streaming chunk from generate: 需定期监测空
+2026-03-31 21:55:46,805 - __main__ - INFO - Streaming chunk from generate: 腹血糖及Hb
+2026-03-31 21:55:46,912 - __main__ - INFO - Streaming chunk from generate: A1c；
+
+2026-03-31 21:55:47,033 - __main__ - INFO - Streaming chunk from generate: - **冠心病/
+2026-03-31 21:55:47,134 - __main__ - INFO - Streaming chunk from generate: 动脉粥样硬化**：
+2026-03-31 21:55:47,292 - __main__ - INFO - Streaming chunk from generate: 父亲有冠心病 +
+2026-03-31 21:55:47,378 - __main__ - INFO - Streaming chunk from generate:  自身高血压+
+2026-03-31 21:55:47,441 - __main__ - INFO - Streaming chunk from generate: 高脂血症
+2026-03-31 21:55:47,597 - __main__ - INFO - Streaming chunk from generate: +年龄45岁 →
+2026-03-31 21:55:47,663 - __main__ - INFO - Streaming chunk from generate:  心血管事件
+2026-03-31 21:55:47,794 - __main__ - INFO - Streaming chunk from generate: 中危人群，
+2026-03-31 21:55:47,911 - __main__ - INFO - Streaming chunk from generate: 需强化血脂管理
+2026-03-31 21:55:47,971 - __main__ - INFO - Streaming chunk from generate: （尤其LDL
+2026-03-31 21:55:48,036 - __main__ - INFO - Streaming chunk from generate: 目标应＜2.
+2026-03-31 21:55:48,191 - __main__ - INFO - Streaming chunk from generate: 6，理想＜1
+2026-03-31 21:55:48,277 - __main__ - INFO - Streaming chunk from generate: .8）。
+
+
+2026-03-31 21:55:48,431 - __main__ - INFO - Streaming chunk from generate:  总结：王五当前
+2026-03-31 21:55:48,541 - __main__ - INFO - Streaming chunk from generate: 明确需注意并
+2026-03-31 21:55:48,587 - __main__ - INFO - Streaming chunk from generate: 持续管理的慢性
+2026-03-31 21:55:48,719 - __main__ - INFO - Streaming chunk from generate: 病包括：  
+
+2026-03-31 21:55:48,806 - __main__ - INFO - Streaming chunk from generate: **高血压、高脂血
+2026-03-31 21:55:48,937 - __main__ - INFO - Streaming chunk from generate: 症、超重/
+2026-03-31 21:55:49,073 - __main__ - INFO - Streaming chunk from generate: 脂肪肝（代谢相关慢性
+2026-03-31 21:55:49,184 - __main__ - INFO - Streaming chunk from generate: 肝病）、慢性胃病
+2026-03-31 21:55:49,291 - __main__ - INFO - Streaming chunk from generate: （溃疡后状态
+2026-03-31 21:55:49,423 - __main__ - INFO - Streaming chunk from generate: ）**；  
+同时
+2026-03-31 21:55:49,510 - __main__ - INFO - Streaming chunk from generate: 须高度警惕并
+2026-03-31 21:55:49,617 - __main__ - INFO - Streaming chunk from generate: 主动预防：**2型
+2026-03-31 21:55:49,730 - __main__ - INFO - Streaming chunk from generate: 糖尿病、冠心病**
+2026-03-31 21:55:49,886 - __main__ - INFO - Streaming chunk from generate: 。
+
+建议严格遵循
+2026-03-31 21:55:49,951 - __main__ - INFO - Streaming chunk from generate: 医生建议：限
+2026-03-31 21:55:50,015 - __main__ - INFO - Streaming chunk from generate: 盐减脂、增加
+2026-03-31 21:55:50,125 - __main__ - INFO - Streaming chunk from generate: 膳食纤维、每周
+2026-03-31 21:55:50,214 - __main__ - INFO - Streaming chunk from generate: ≥150分钟
+2026-03-31 21:55:50,347 - __main__ - INFO - Streaming chunk from generate: 中等强度运动
+2026-03-31 21:55:50,452 - __main__ - INFO - Streaming chunk from generate: （当前高尔夫+
+2026-03-31 21:55:50,499 - __main__ - INFO - Streaming chunk from generate: 步行基本达标，
+2026-03-31 21:55:50,613 - __main__ - INFO - Streaming chunk from generate: 可适度加强）、
+2026-03-31 21:55:50,724 - __main__ - INFO - Streaming chunk from generate: 每6个月复查
+2026-03-31 21:55:50,766 - __main__ - INFO - Streaming chunk from generate: 血压/血脂/
+2026-03-31 21:55:50,853 - __main__ - INFO - Streaming chunk from generate: 肝肾功能及
+2026-03-31 21:55:50,987 - __main__ - INFO - Streaming chunk from generate: 腹部超声，年度
+2026-03-31 21:55:51,028 - __main__ - INFO - Streaming chunk from generate: 全面体检。
+2026-03-31 21:55:51,056 - __main__ - INFO - Streaming chunk from generate: 
+2026-03-31 21:55:51,059 - __main__ - INFO - Streaming chunk from generate: 
+2026-03-31 22:02:59,952 - __main__ - INFO - The service has been shut down

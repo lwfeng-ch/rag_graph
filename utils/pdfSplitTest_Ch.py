@@ -59,9 +59,9 @@ def extract_text_from_pdf(filename, page_numbers, min_line_length):
 
 
 # 将PDF文档处理函数得到的文本列表再按一定粒度，部分重叠式的切割文本，使上下文更完整
-# chunk_size：每个文本块的目标大小（以字符为单位），默认为 800
-# overlap_size：块之间的重叠大小（以字符为单位），默认为 200
-def split_text(paragraphs, chunk_size=800, overlap_size=200):
+# chunk_size：每个文本块的目标大小（以字符为单位），默认为 500
+# overlap_size：块之间的重叠大小（以字符为单位），默认为 50
+def split_text(paragraphs, chunk_size=500,overlap_size=50):
     # 按指定 chunk_size 和 overlap_size 交叠割文本
     sentences = [s.strip() for p in paragraphs for s in sent_tokenize(p)]
     chunks = []

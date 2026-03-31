@@ -1,4 +1,4 @@
-from langchain_chroma import Chroma
+from langchain_qdrant import QdrantVectorStore
 from langchain_core.tools.retriever import create_retriever_tool
 from langchain_core.tools import tool
 from utils.config import Config
@@ -15,12 +15,23 @@ def get_tools(llm_embedding):
         list: 工具列表
     """
 
-    # 创建 Chroma 向量存储实例
-    vectorstore = Chroma(
-        persist_directory=Config.CHROMADB_DIRECTORY,
-        collection_name=Config.CHROMADB_COLLECTION_NAME,
-        embedding_function=llm_embedding,
-    )
+    if Config.QDRANT_URL and Config.QDRANT_URL != ":memory:":
+        # 服务器模式：连接到 Qdrant 服务器（本地部署或云服务）
+        vectorstore = QdrantVectorStore.from_existing_collection(
+            embedding=llm_embedding,
+            collection_name=Config.QDRANT_COLLECTION_NAME,
+            url=Config.QDRANT_URL,
+            api_key=Config.QDRANT_API_KEY,
+        )
+    else:
+        # 本地持久化模式：使用本地文件系统存储向量数据
+        vectorstore = QdrantVectorStore.from_existing_collection(
+            embedding=llm_embedding,
+            collection_name=Config.QDRANT_COLLECTION_NAME,
+            path=Config.QDRANT_LOCAL_PATH,
+        )
+
+
     # 将向量存储转换为检索器
     retriever = vectorstore.as_retriever()
     # 创建检索工具
