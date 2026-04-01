@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI):
     Yields:
         None: 在 yield 前完成初始化，yield 后执行清理。
     """
-    global graph, tool_config
+    global graph, tool_config, middleware_manager
     try:
         llm_chat, llm_embedding = get_llm(Config.LLM_TYPE)
         tools = get_tools(llm_embedding)
