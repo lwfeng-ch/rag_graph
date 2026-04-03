@@ -1,0 +1,70 @@
+# cloud-mineru/docker-compose.yml
+services:
+  mineru-api:
+    image: mineru:latest
+    container_name: mineru-api
+    restart: always
+
+    # ====== 端口映射 ======
+    ports:
+      - "8000:8000"
+
+    # ====== 环境变量 ======
+    environment:
+      # 模型加载方式: local=本地模型, online=在线下载
+      MINERU_MODEL_SOURCE: local
+      # 可选: 指定 CUDA 设备
+      CUDA_VISIBLE_DEVICES: "0"
+      # 可选: 日志级别 (DEBUG/INFO/WARNING/ERROR)
+      LOG_LEVEL: INFO
+
+    # ====== 启动命令 ======
+    entrypoint: mineru-api
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      # ===== 显存优化选项 =====
+      # 如果显存 < 24GB，取消下面两行注释并调低比例
+      # - --gpu-memory-utilization
+      # - "0.5"
+
+    # ====== 数据卷挂载（可选，用于持久化） ======
+    volumes:
+      - ./data/input:/app/input
+      - ./data/output:/app/output
+      # 模型缓存持久化（避免每次重建容器重新下载）
+      - mineru-models:/root/.cache
+      # 手动挂载 NVIDIA 驱动库（nvidia-container-runtime 未自动挂载时需要）
+      - /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/local/nvidia/lib64/libcuda.so.1:ro
+
+    # ====== 系统资源配置 ======
+    ulimits:
+      stack: 67108864      # 栈大小 64MB
+    ipc: host              # 共享主机 IPC 命名空间（GPU 通信需要）
+    shm_size: "8g"         # 共享内存大小
+
+    # ====== 健康检查 ======
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s        # 每 30 秒检查一次
+      timeout: 10s         # 超时时间
+      retries: 5           # 最多重试 5 次
+      start_period: 120s   # 启动后等待 120 秒再开始检查
+
+    # ====== GPU 资源分配 ======
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]     # 使用第 0 号 GPU
+              capabilities: [gpu]
+        limits:
+          memory: 32g               # 限制容器最大内存
+
+# ====== 持久化卷 ======
+volumes:
+  mineru-models:
+    driver: local

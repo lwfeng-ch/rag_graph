@@ -1,3 +1,4 @@
+# main.py
 import os
 import re
 import json
@@ -114,13 +115,17 @@ def format_response(response):
 async def lifespan(app: FastAPI):
     """管理 FastAPI 应用生命周期的异步上下文管理器，负责启动和关闭时的初始化与清理。
 
+    LangChain v1 变更说明：
+    - get_llm / get_tools / create_graph 接口保持不变
+    - 向量数据库在底层已从 ChromaDB 迁移到 Qdrant，此处无需修改
+
     Args:
         app (FastAPI): FastAPI 应用实例。
 
     Yields:
         None: 在 yield 前完成初始化，yield 后执行清理。
     """
-    global graph, tool_config
+    global graph, tool_config, middleware_manager
     try:
         llm_chat, llm_embedding = get_llm(Config.LLM_TYPE)
         tools = get_tools(llm_embedding)
@@ -357,6 +362,9 @@ async def chat_completions(request: ChatCompletionRequest, dependencies: Tuple[a
         user_id = request.userId if request.userId else "unknown"
         conversation_id = request.conversationId if request.conversationId else "default"
         
+        # LangChain v1 变更说明：
+        # config["configurable"] 模式仍然完全兼容
+        # 同时 user_id 也可通过 context 参数传递（v1 推荐方式）
         config = {
             "configurable": {
                 "thread_id": f"{user_id}@@{conversation_id}",
@@ -381,5 +389,3 @@ if __name__ == "__main__":
     # uvicorn是一个用于运行ASGI应用的轻量级、超快速的ASGI服务器实现
     # 用于部署基于FastAPI框架的异步PythonWeb应用程序
     uvicorn.run(app, host=Config.HOST, port=Config.PORT)
-
-

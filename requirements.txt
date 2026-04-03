@@ -4,12 +4,9 @@ langchain-core>=1.0.0
 langchain-openai>=0.3.0
 langgraph>=1.0.0
 
-# ===== 向量数据库: Qdrant (替换 ChromaDB) =====
+# ===== 向量数据库: Qdrant=====
 langchain-qdrant>=1.0.0
 qdrant-client>=1.12.0
-
-# ===== 旧版兼容（如需要） =====
-# langchain-classic  # 仅在使用旧版chain/retriever时需要
 
 # ===== LangGraph 持久化 =====
 langgraph-checkpoint>=2.0.0
@@ -32,4 +29,27 @@ pydantic>=2.0.0
 requests>=2.28.0
 
 # ===== PDF处理 =====
-# pymupdf  # 根据项目实际PDF处理库添加
+langchain-community>=0.3.0
+langchain-text-splitters>=0.3.0
+pypdf>=4.0.0
+
+# requirements_v2.txt
+# 知识库构建链路 v2 依赖清单
+
+# HTTP 客户端
+requests>=2.31.0
+httpx>=0.25.0
+
+# LangChain 文本切分
+langchain-text-splitters>=0.3.0
+
+# 向量数据库
+qdrant-client>=1.9.0
+
+# Embedding 模型
+openai>=1.30.0
+
+# 工具库
+tiktoken>=0.7.0
+python-dotenv>=1.0.0  # 可选：用于 .env 文件覆盖敏感配置（非必须）
+tqdm>=4.66.0

@@ -9,6 +9,8 @@ import re
 import uuid
 from datetime import datetime
 
+from utils.config import Config
+
 # 设置日志的基本配置，指定日志级别为 INFO，并定义日志格式
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -693,7 +695,7 @@ if __name__ == "__main__":
                 continue
         return None
 
-    preferred_port = int(os.getenv("PORT", "3000"))
+    preferred_port = Config.PORT
     selected_port = pick_port(preferred_port, preferred_port) or pick_port(7861, 7870)
     if not selected_port:
         raise OSError("No available port found")

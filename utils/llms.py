@@ -11,6 +11,7 @@ from langchain_core.documents import Document
 from langchain_core.callbacks import Callbacks
 from langchain_core.documents.compressor import BaseDocumentCompressor
 
+from utils.config import Config
 
 # 设置日志模版
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,26 +21,26 @@ logger = logging.getLogger(__name__)
 # 模型配置字典
 MODEL_CONFIGS = {
     "openai": {
-        "base_url": os.getenv("OPENAI_BASE_URL"),
-        "api_key": os.getenv("OPENAI_API_KEY"),
+        "base_url": Config.OPENAI_API_BASE,
+        "api_key": Config.OPENAI_API_KEY,
         "chat_model": "gpt-4o",
         "embedding_model": "text-embedding-3-small"
     },
     "qwen": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "api_key": os.getenv("DASHSCOPE_API_KEY"),
+        "api_key": Config.QWEN_API_KEY,
         "chat_model": "qwen-plus",
         "rerank_model": "qwen3-rerank",
         "embedding_model": "text-embedding-v1"
     },
     "oneapi": {
         "base_url": "http://139.224.72.218:3000/v1",
-        "api_key": os.getenv("DASHSCOPE_API_KEY"),
+        "api_key": Config.QWEN_API_KEY,
         "chat_model": "qwen-max",
         "embedding_model": "text-embedding-v1"
     },
     "ollama": {
-        "base_url": "http://localhost:11434/v1",
+        "base_url": Config.OLLAMA_API_BASE,
         "api_key": "ollama",
         "chat_model": "qwen2.5:32b",
         "embedding_model": "bge-m3:latest"
@@ -195,10 +196,10 @@ def get_reranker(llm_type: str = DEFAULT_LLM_TYPE, top_n: int = 3) -> BaseDocume
     try:
         config = MODEL_CONFIGS.get(llm_type, MODEL_CONFIGS[DEFAULT_LLM_TYPE])
         model_name = config.get("rerank_model", "qwen3-rerank")
-        api_key = config.get("rerank_api_key", os.getenv("DASHSCOPE_API_KEY"))
+        api_key = config.get("rerank_api_key", Config.QWEN_API_KEY)
 
         if not api_key:
-            logger.warning(f"缺少重排 API Key ({llm_type})，请检查环境变量 DASHSCOPE_API_KEY")
+            logger.warning(f"缺少重排 API Key ({llm_type})，请检查 DASHSCOPE_API_KEY 环境变量")
 
         reranker = DashScopeReranker(
             model=model_name,
@@ -216,7 +217,7 @@ def get_reranker(llm_type: str = DEFAULT_LLM_TYPE, top_n: int = 3) -> BaseDocume
 # 示例使用
 if __name__ == "__main__":
     # 提醒：如果是本地直接运行此文件测试，请确保环境变量已配置
-    if not os.getenv("DASHSCOPE_API_KEY"):
+    if not Config.QWEN_API_KEY:
         logger.warning("未检测到 DASHSCOPE_API_KEY 环境变量，接下来的 API 调用测试可能会失败！")
 
     test_llm_type = "qwen"

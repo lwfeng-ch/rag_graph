@@ -16,6 +16,8 @@ import uuid
 # 导入 datetime 库，用于处理日期和时间
 from datetime import datetime
 
+from utils.config import Config
+
 # 设置日志的基本配置，指定日志级别为 INFO，并定义日志格式
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 # 创建一个名为当前模块的日志记录器
@@ -875,7 +877,7 @@ if __name__ == "__main__":
                 continue
         return None
 
-    preferred_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
+    preferred_port = Config.GRADIO_SERVER_PORT
     selected_port = pick_port(preferred_port, preferred_port) or pick_port(7861, 7870)
     if not selected_port:
         raise OSError("No available port found in range 7860-7870")

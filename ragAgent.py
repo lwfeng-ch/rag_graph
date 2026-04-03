@@ -1,3 +1,5 @@
+# ragAgent.py
+# LangChain v1 / LangGraph v1 迁移版本
 import logging
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 import os
@@ -5,20 +7,36 @@ import sys
 import threading
 import time
 import uuid
+import uuid as uuid_module
 from html import escape
-from typing import Literal, Annotated, Sequence, Optional
+from typing import Literal, Annotated, Sequence, Optional, Tuple
 from dataclasses import dataclass
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, AIMessage
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_core.messages import ToolMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.store.base import BaseStore
-from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field
 from utils.llms import get_llm
 from utils.tools_config import get_tools
 from utils.config import Config
+from utils.middleware import MiddlewareManager
+
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+
+# LangChain v1 变更说明：
+# - langgraph.runtime.Runtime 在 LangGraph v1 中可能已更名或调整
+# - 尝试从新位置导入，如失败则回退到兼容方式
+try:
+    from langgraph.runtime import Runtime
+except ImportError:
+    # LangGraph v1 兼容：如果 Runtime 不在 langgraph.runtime 中，
+    # 则使用 langgraph.types 中的 RunnableConfig 模式替代
+    Runtime = None
+    logging.getLogger(__name__).warning(
+        "langgraph.runtime.Runtime not found, using fallback config pattern"
+    )
 
 # # 设置日志基本配置，级别为DEBUG或INFO
 logger = logging.getLogger(__name__)
@@ -49,9 +67,28 @@ class Context:
 
 
 class AgentState(MessagesState):
+    """对话状态，包含业务字段和 Middleware 追踪字段。
+    
+    LangGraph 的状态是每次执行独立的，天然线程安全。
+    所有 Middleware 的可变状态都存在此处，而非 Middleware 实例上。
+    """
+    
     relevance_score: Annotated[Optional[str], "Relevance score of retrieved documents, 'yes' or 'no'"] = None
     rewrite_count: Annotated[int, "Number of times query has been rewritten"] = 0
 
+    # ===== Middleware 追踪字段（每次执行独立，多用户安全） =====
+    # 模型调用计数器：跨节点累计（agent + grade + rewrite + generate）
+    mw_model_call_count: Annotated[int, "Total LLM calls across all nodes in this execution"] = 0
+    # 模型调用累计耗时（秒）
+    mw_model_total_time: Annotated[float, "Total LLM call time in seconds"] = 0.0
+    # 工具调用累计耗时（秒）
+    mw_tool_total_time: Annotated[float, "Total tool call time in seconds"] = 0.0
+    # PII 检测标记
+    mw_pii_detected: Annotated[bool, "Whether PII was detected in this execution"] = False
+    # 强制终止标记（由限制类 Middleware 触发）
+    mw_force_stop: Annotated[bool, "Force stop flag set by middleware"] = False
+    # 各节点耗时记录（用于性能分析）
+    mw_node_timings: Annotated[Optional[dict], "Per-node timing records"] = None
 
 # 定义工具配置类，用于存储和管理工具列表、名称集合和路由配置
 class ToolConfig:
@@ -114,38 +151,77 @@ class DocumentRelevanceScore(BaseModel):
 # 它接收工具列表和最大线程数作为参数，初始化一个工具节点对象。
 # 当调用并行工具节点时，它会从状态中提取消息列表，获取最后一个消息的工具调用列表，
 # 并行执行每个工具调用，将结果返回为工具节点，将所有工具调用的结果合并为一个列表，作为图的输出。
+# call_tools 节点 — 工具类节点（ParallelToolNode 改造）
 class ParallelToolNode:
-    def __init__(self, tools, max_workers: int = 5):
+    def __init__(self, tools, max_workers: int = 5, middleware_manager: MiddlewareManager = None):
         from langgraph.prebuilt import ToolNode
         self.tools = tools
         self.max_workers = max_workers
         self.tool_node = ToolNode(tools)
+        # Middleware 管理器引用（不可变配置，非运行时状态）
+        self.middleware_manager = middleware_manager
+        # 获取重试 Middleware（如果注册了的话）
+        self._retry_middleware = (
+            middleware_manager.get_tool_retry_middleware() if middleware_manager else None
+        )
 
-    def _run_single_tool(self, tool_call: dict, tool_map: dict) -> ToolMessage:
-        """执行单个工具调用"""
+    def _run_single_tool(self, tool_call: dict, tool_map: dict) -> Tuple[ToolMessage, dict]:
+        """执行单个工具调用，返回 (ToolMessage, mw_updates)。
+        
+        Middleware 集成点:before_tool / after_tool / wrap_tool_call重试
+        """
+        mw_updates = {}
         try:
             tool_name = tool_call["name"]
             tool = tool_map.get(tool_name)
             if not tool:
                 raise ValueError(f"Tool {tool_name} not found")
-            result = tool.invoke(tool_call["args"])
+
+            # ===== Middleware: before_tool =====
+            if self.middleware_manager:
+                before_updates, stop = self.middleware_manager.run_before_tool({}, tool_call)
+                mw_updates.update(before_updates)
+                if stop:
+                    return ToolMessage(
+                        content="工具调用被安全策略拦截",
+                        tool_call_id=tool_call["id"],
+                        name=tool_name
+                    ), mw_updates
+
+            # 执行工具（支持重试）
+            start_time = time.time()
+            if self._retry_middleware:
+                # 使用重试 Middleware 包裹工具调用
+                def _invoke(tc, tm):
+                    t = tm.get(tc["name"])
+                    return t.invoke(tc["args"])
+                result = self._retry_middleware.wrap_tool_call(_invoke, tool_call, tool_map)
+            else:
+                result = tool.invoke(tool_call["args"])
+            elapsed = time.time() - start_time
+
+            # ===== Middleware: after_tool =====
+            if self.middleware_manager:
+                after_updates = self.middleware_manager.run_after_tool({}, result, tool_name, elapsed)
+                mw_updates.update(after_updates)
+
             return ToolMessage(
                 content=str(result),
                 tool_call_id=tool_call["id"],
                 name=tool_name
-            )
+            ), mw_updates
+
         except Exception as e:
             logger.error(f"Error executing tool {tool_call.get('name', 'unknown')}: {e}")
             return ToolMessage(
                 content=f"Error: {str(e)}",
                 tool_call_id=tool_call["id"],
                 name=tool_call.get("name", "unknown")
-            )
+            ), mw_updates
 
     def __call__(self, state: dict) -> dict:
         """并行执行所有工具调用"""
         logger.info("ParallelToolNode processing tool calls")
-        # 尝试不同的方式获取消息
         if isinstance(state, dict) and "messages" in state:
             messages = state["messages"]
         elif hasattr(state, "messages"):
@@ -153,11 +229,11 @@ class ParallelToolNode:
         else:
             logger.warning("No messages found in state")
             return {"messages": []}
-        
+
         if not messages:
             logger.warning("Messages list is empty")
             return {"messages": []}
-        
+
         last_message = messages[-1]
         tool_calls = getattr(last_message, "tool_calls", [])
         if not tool_calls:
@@ -166,8 +242,8 @@ class ParallelToolNode:
 
         tool_map = {tool.name: tool for tool in self.tools}
         results = []
-        
-        # 使用线程池并行执行工具调用
+        all_mw_updates = {}
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_tool = {
                 executor.submit(self._run_single_tool, tool_call, tool_map): tool_call
@@ -175,8 +251,14 @@ class ParallelToolNode:
             }
             for future in as_completed(future_to_tool):
                 try:
-                    result = future.result()
-                    results.append(result)
+                    tool_msg, mw_updates = future.result()
+                    results.append(tool_msg)
+                    # 合并各工具的 Middleware 更新（累加数值型字段）
+                    for k, v in mw_updates.items():
+                        if k in all_mw_updates and isinstance(v, (int, float)):
+                            all_mw_updates[k] = all_mw_updates[k] + v
+                        else:
+                            all_mw_updates[k] = v
                 except Exception as e:
                     logger.error(f"Tool execution failed: {e}")
                     tool_call = future_to_tool[future]
@@ -187,7 +269,7 @@ class ParallelToolNode:
                     ))
 
         logger.info(f"Completed {len(results)} tool calls")
-        return {"messages": results}
+        return {"messages": results, **all_mw_updates}
 
 # 定义获取最新用户问题的函数，用于从状态中提取用户输入的最新问题。
 def get_latest_question(state: AgentState) -> Optional[str]:
@@ -216,6 +298,7 @@ def get_latest_question(state: AgentState) -> Optional[str]:
         return None
 
 # 定义消息过滤函数，用于从消息列表中提取最后5条消息。
+# LangChain v1 变更说明：AIMessage 现在是 ChatOpenAI invoke() 的确切返回类型
 def filter_messages(messages: list) -> list:
     """过滤消息列表，仅保留 AIMessage 和 HumanMessage 类型消息"""
     filtered = [msg for msg in messages if msg.__class__.__name__ in ['AIMessage', 'HumanMessage']]
@@ -256,6 +339,11 @@ def store_memory(question: BaseMessage, user_id: str, store: BaseStore) -> str:
 def create_chain(llm_chat, template_file: str, structured_output=None):
     """创建 LLM 处理链，加载提示模板并绑定模型，使用缓存避免重复读取文件。
 
+    LangChain v1 变更说明：
+    - PromptTemplate, ChatPromptTemplate 仍在 langchain_core.prompts 中，无需修改
+    - with_structured_output() 方法保持不变
+    - LCEL（LangChain Expression Language）管道操作符 | 保持不变
+
     Args:
         llm_chat: 语言模型实例。
         template_file: 提示模板文件路径。
@@ -289,39 +377,71 @@ def create_chain(llm_chat, template_file: str, structured_output=None):
         raise
 
 # 定义代理函数，用于处理用户查询并调用工具或生成响应。
-def agent(state: AgentState, runtime: Runtime[Context], llm_chat, tool_config: ToolConfig) -> dict:
+def agent(state: AgentState, config: dict, llm_chat,tool_config: ToolConfig,
+          store=None, middleware_manager: MiddlewareManager = None) -> dict:
     """代理函数，根据用户问题决定是否调用工具或结束。
 
     Args:
         state: 当前对话状态。
-        runtime: 运行时对象，包含context和store。
+        config: 运行时配置字典，包含 configurable 信息。
         llm_chat: Chat模型。
         tool_config: 工具配置参数。
+        store: 数据存储实例（可选）。
 
     Returns:
         dict: 更新后的对话状态。
-    """
+    """   
     logger.info("Agent processing user query")
-    user_id = runtime.context.user_id if runtime.context and hasattr(runtime.context, 'user_id') else "unknown"
-    namespace = ("memories", user_id)
+    node_name = "agent"
+    mw_updates = {}
+
+    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+    user_id = configurable.get("user_id", "unknown")
+    
     try:
         question = state["messages"][-1]
         logger.info(f"agent question:{question}")
 
-        user_info = store_memory(question, user_id, runtime.store)
+        # ===== Middleware: before_model =====
+        if middleware_manager:
+            before_updates, should_stop = middleware_manager.run_before_model(state, node_name)
+            mw_updates.update(before_updates)
+            if should_stop:
+                logger.warning(f"[{node_name}] 被 Middleware 终止")
+                return {
+                    "messages": [{"role": "system", "content": "请求已被安全策略拦截，请检查输入内容"}],
+                    **mw_updates
+                }
+            # 处理摘要截断请求
+            if before_updates.get("_mw_should_truncate"):
+                keep = before_updates.get("_mw_keep_recent", 5)
+                state["messages"] = state["messages"][-keep:]
+
+        user_info = ""
+        if store:
+            user_info = store_memory(question, user_id, store)
         messages = filter_messages(state["messages"])
 
         llm_chat_with_tool = llm_chat.bind_tools(tool_config.get_tools())
-
         agent_chain = create_chain(llm_chat_with_tool, Config.PROMPT_TEMPLATE_TXT_AGENT)
+
+        # 计时模型调用
+        start_time = time.time()
         response = agent_chain.invoke({"question": question, "messages": messages, "userInfo": user_info})
-        return {"messages": [response]}
+        elapsed = time.time() - start_time
+
+        # ===== Middleware: after_model =====
+        if middleware_manager:
+            after_updates = middleware_manager.run_after_model(state, response, node_name, elapsed)
+            mw_updates.update(after_updates)
+
+        return {"messages": [response], **mw_updates}
     except Exception as e:
         logger.error(f"Error in agent processing: {e}")
-        return {"messages": [{"role": "system", "content": "处理请求时出错"}]}
-
+        return {"messages": [{"role": "system", "content": "处理请求时出错"}], **mw_updates}
+        
 # 定义文档评分函数，用于评估检索到的文档内容与问题的相关性。
-def grade_documents(state: AgentState, llm_chat) -> dict:
+def grade_documents(state: AgentState, llm_chat, middleware_manager: MiddlewareManager = None) -> dict:
     """评估检索到的文档内容与问题的相关性，并将评分结果存储在状态中。
 
     Args:
@@ -331,6 +451,10 @@ def grade_documents(state: AgentState, llm_chat) -> dict:
         dict: 更新后的状态，包含评分结果。
     """
     logger.info("Grading documents for relevance")
+    node_name = "grade_documents"
+    mw_updates = {}
+
+    # 检查状态是否包含消息历史
     if not state.get("messages"):
         logger.error("Messages state is empty")
         return {
@@ -339,17 +463,68 @@ def grade_documents(state: AgentState, llm_chat) -> dict:
         }
 
     try:
+        # ===== Middleware: before_model =====
+        if middleware_manager:
+            before_updates, should_stop = middleware_manager.run_before_model(state, node_name)
+            mw_updates.update(before_updates)
+            if should_stop:
+                logger.warning(f"[{node_name}] 被 Middleware 终止，默认标记文档不相关")
+                return {
+                    "messages": state["messages"],
+                    "relevance_score": "no",
+                    **mw_updates
+                }
+                
         question = get_latest_question(state)
         context = state["messages"][-1].content
+   
+        # 检查检索到的文档内容是否为空
+        # 如果为空，自动评分为 'no'
+        if not context or str(context).strip() == "":
+            logger.warning("Retrieved context is empty, auto-grading as 'no'")
+            return {
+                "messages": state["messages"],
+                "relevance_score": "no"
+            }        
 
-        grade_chain = create_chain(llm_chat, Config.PROMPT_TEMPLATE_TXT_GRADE, DocumentRelevanceScore)
+        if hasattr(llm_chat, "model_copy"):
+            # 兼容 Pydantic v2 (LangChain 较新版本)
+            grader_llm = llm_chat.model_copy(update={"temperature": 0.0})
+        elif hasattr(llm_chat, "copy"):
+            # 兼容 Pydantic v1 (LangChain 较旧版本)
+            grader_llm = llm_chat.copy(update={"temperature": 0.0})
+        else:
+            # 最后的退路
+            grader_llm = llm_chat.bind(temperature=0.0)
+            
+        logger.debug(f"Grader LLM temperature set to: {getattr(grader_llm, 'temperature', 'unknown')}")
+        
+        start_time = time.time()
+        grade_chain = create_chain(grader_llm, Config.PROMPT_TEMPLATE_TXT_GRADE, DocumentRelevanceScore)
         scored_result = grade_chain.invoke({"question": question, "context": context})
+        elapsed = time.time() - start_time
+        
         score = scored_result.binary_score
+        score = str(scored_result.binary_score).strip().lower()
+         
         logger.info(f"Document relevance score: {score}")
+        
+        # 二次校验：确保输出仅为 yes 或 no
+        if score not in ["yes", "no"]:
+            logger.warning(f"Unexpected score value: {score}, defaulting to 'no'")
+            score = "no"
+
+        logger.info(f"Document relevance score: {score}")
+
+        # ===== Middleware: after_model =====
+        if middleware_manager:
+            after_updates = middleware_manager.run_after_model(state, scored_result, node_name, elapsed)
+            mw_updates.update(after_updates)
 
         return {
             "messages": state["messages"],
-            "relevance_score": score
+            "relevance_score": score,
+            **mw_updates
         }
     except (IndexError, KeyError) as e:
         logger.error(f"Message access error: {e}")
@@ -365,7 +540,7 @@ def grade_documents(state: AgentState, llm_chat) -> dict:
         }
 
 # 定义重写函数，用于改进用户查询。
-def rewrite(state: AgentState, llm_chat) -> dict:
+def rewrite(state: AgentState, llm_chat, middleware_manager: MiddlewareManager = None) -> dict:
     """重写用户查询以改进问题。
 
     Args:
@@ -375,19 +550,46 @@ def rewrite(state: AgentState, llm_chat) -> dict:
         dict: 更新后的消息状态。
     """
     logger.info("Rewriting query")
+    node_name = "rewrite"
+    mw_updates = {}
+    
     try:
+        # ===== Middleware: before_model =====
+        if middleware_manager:
+            before_updates, should_stop = middleware_manager.run_before_model(state, node_name)
+            mw_updates.update(before_updates)
+            if should_stop:
+                logger.warning(f"[{node_name}] 被 Middleware 终止，跳过重写")
+                # 终止时直接返回原问题，让流程继续到 generate
+                question = get_latest_question(state) or "无法获取问题"
+                return {
+                    "messages": [{"role": "user", "content": question}],
+                    "rewrite_count": state.get("rewrite_count", 0) + 1,
+                    **mw_updates
+                }
+
         question = get_latest_question(state)
         rewrite_chain = create_chain(llm_chat, Config.PROMPT_TEMPLATE_TXT_REWRITE)
+        
+        start_time = time.time()
         response = rewrite_chain.invoke({"question": question})
+        elapsed = time.time() - start_time
+        
         rewrite_count = state.get("rewrite_count", 0) + 1
         logger.info(f"Rewrite count: {rewrite_count}")
-        return {"messages": [response], "rewrite_count": rewrite_count}
+        
+        #  Middleware: after_model 
+        if middleware_manager:
+            after_updates = middleware_manager.run_after_model(state, response, node_name, elapsed)
+            mw_updates.update(after_updates)
+            
+        return {"messages": [response], "rewrite_count": rewrite_count, **mw_updates}
     except (IndexError, KeyError) as e:
         logger.error(f"Message access error in rewrite: {e}")
-        return {"messages": [{"role": "system", "content": "无法重写查询"}]}
+        return {"messages": [{"role": "system", "content": "无法重写查询"}], **mw_updates}
 
 # 定义生成函数，用于基于工具返回的内容生成最终回复。
-def generate(state: AgentState, llm_chat) -> dict:
+def generate(state: AgentState, llm_chat, middleware_manager: MiddlewareManager = None) -> dict:
     """基于工具返回的内容生成最终回复。
 
     Args:
@@ -397,12 +599,35 @@ def generate(state: AgentState, llm_chat) -> dict:
         dict: 更新后的消息状态。
     """
     logger.info("Generating final response")
+    node_name = "generate"
+    mw_updates = {}
+    
     try:
+        # ===== Middleware: before_model =====
+        if middleware_manager:
+            before_updates, should_stop = middleware_manager.run_before_model(state, node_name)
+            mw_updates.update(before_updates)
+            if should_stop:
+                logger.warning(f"[{node_name}] 被 Middleware 终止")
+                return {
+                    "messages": [{"role": "system", "content": "生成回复时被安全策略拦截"}],
+                    **mw_updates
+                }
+        
         question = get_latest_question(state)
         context = state["messages"][-1].content
         generate_chain = create_chain(llm_chat, Config.PROMPT_TEMPLATE_TXT_GENERATE)
+        
+        start_time = time.time()
         response = generate_chain.invoke({"context": context, "question": question})
-        return {"messages": [response]}
+        elapsed = time.time() - start_time
+        
+        # ===== Middleware: after_model =====
+        if middleware_manager:
+            after_updates = middleware_manager.run_after_model(state, response, node_name, elapsed)
+            mw_updates.update(after_updates)
+            
+        return {"messages": [response], **mw_updates}
     except (IndexError, KeyError) as e:
         logger.error(f"Message access error in generate: {e}")
         return {"messages": [{"role": "system", "content": "无法生成回复"}]}
@@ -531,9 +756,24 @@ def save_graph_visualization(graph: StateGraph, filename: str = "graph.png") -> 
         # 记录警告日志
         logger.warning(f"Failed to save graph visualization: {e}")
 
+from utils.middleware import (
+    MiddlewareManager,
+    LoggingMiddleware,
+    ModelCallLimitMiddleware,
+    PIIDetectionMiddleware,
+    SummarizationMiddleware,
+    ToolRetryMiddleware,
+)
 
 def create_graph(llm_chat, llm_embedding, tool_config: ToolConfig) -> StateGraph:
     """创建并配置状态图。
+    
+    LangChain v1 / LangGraph v1 迁移说明：
+    - StateGraph 核心 API 保持不变（add_node, add_edge, add_conditional_edges, compile）
+    - tools_condition 从 langgraph.prebuilt 导入（LangGraph v1 保持向后兼容）
+    - PostgresSaver / PostgresStore 接口不变
+    - agent 节点签名从 (state, runtime) 调整为 (state, config)，通过 config 传递上下文
+    - 向量数据库已在 tools_config.py 中从 ChromaDB 迁移至 Qdrant
 
     Args:
         llm_chat: Chat模型。
@@ -548,44 +788,54 @@ def create_graph(llm_chat, llm_embedding, tool_config: ToolConfig) -> StateGraph
     """
     DB_URI = Config.DB_URI
     
+    # ===== 初始化 Middleware 管理器（全局唯一，但无可变状态） =====
+    middleware_manager = MiddlewareManager([
+        LoggingMiddleware(),
+        ModelCallLimitMiddleware(max_calls=Config.MW_MAX_MODEL_CALLS),
+        PIIDetectionMiddleware(mode=Config.MW_PII_MODE),
+        SummarizationMiddleware(
+            max_messages=Config.MW_SUMMARIZATION_THRESHOLD,
+            keep_recent=Config.MW_SUMMARIZATION_KEEP_RECENT
+        ),
+        ToolRetryMiddleware(
+            max_retries=Config.MW_TOOL_MAX_RETRIES,
+            backoff_factor=Config.MW_TOOL_BACKOFF_FACTOR
+        ),
+    ])
+    
     try:
         # 导入 PostgresSaver 和 PostgresStore
         from langgraph.checkpoint.postgres import PostgresSaver
         from langgraph.store.postgres import PostgresStore
         from langgraph.prebuilt import tools_condition
-        
-        # 测试数据库连接（使用 psycopg2）
         import psycopg2
+        
         conn_psycopg2 = psycopg2.connect(DB_URI)
         print("✓ 数据库连接成功!")
         conn_psycopg2.close()
         
         # 使用 psycopg-pool 创建连接池
         from psycopg_pool import ConnectionPool
-        
         # 创建连接池
-        pool = ConnectionPool(
-            DB_URI,
-            min_size=1,
-            max_size=10
-        )
+        pool = ConnectionPool(DB_URI, min_size=1, max_size=10)
         
         # 创建 PostgresSaver 和 PostgresStore
         checkpointer = PostgresSaver(pool)
         store = PostgresStore(pool, index={"dims": 1536, "embed": llm_embedding})
-        
-        # 调用 setup 方法
         checkpointer.setup()
         store.setup()
         logger.info("PostgresSaver and PostgresStore initialized successfully")
 
+        # LangChain v1 变更说明：
+        # StateGraph 构造保持不变，context_schema 用于定义静态上下文
         workflow = StateGraph(AgentState, context_schema=Context)
         
-        workflow.add_node("agent", lambda state, runtime: agent(state, runtime, llm_chat=llm_chat, tool_config=tool_config))
-        workflow.add_node("call_tools", ParallelToolNode(tool_config.get_tools(), max_workers=5))
-        workflow.add_node("rewrite", lambda state: rewrite(state, llm_chat=llm_chat))
-        workflow.add_node("generate", lambda state: generate(state, llm_chat=llm_chat))
-        workflow.add_node("grade_documents", lambda state: grade_documents(state, llm_chat=llm_chat))
+        # LangChain v1 变更说明：
+        workflow.add_node("agent", lambda state, config: agent(state, config, llm_chat=llm_chat, tool_config=tool_config, store=store, middleware_manager=middleware_manager))
+        workflow.add_node("call_tools", ParallelToolNode(tool_config.get_tools(), max_workers=5, middleware_manager=middleware_manager))
+        workflow.add_node("rewrite", lambda state: rewrite(state, llm_chat=llm_chat, middleware_manager=middleware_manager))
+        workflow.add_node("generate", lambda state: generate(state, llm_chat=llm_chat, middleware_manager=middleware_manager))
+        workflow.add_node("grade_documents", lambda state: grade_documents(state, llm_chat=llm_chat, middleware_manager=middleware_manager))
 
         workflow.add_edge(START, end_key="agent")
         workflow.add_conditional_edges(source="agent", path=tools_condition, path_map={"tools": "call_tools", END: END})
@@ -609,11 +859,12 @@ def create_graph(llm_chat, llm_embedding, tool_config: ToolConfig) -> StateGraph
         
         workflow = StateGraph(AgentState, context_schema=Context)
         
-        workflow.add_node("agent", lambda state, runtime: agent(state, runtime, llm_chat=llm_chat, tool_config=tool_config))
-        workflow.add_node("call_tools", ParallelToolNode(tool_config.get_tools(), max_workers=5))
-        workflow.add_node("rewrite", lambda state: rewrite(state, llm_chat=llm_chat))
-        workflow.add_node("generate", lambda state: generate(state, llm_chat=llm_chat))
-        workflow.add_node("grade_documents", lambda state: grade_documents(state, llm_chat=llm_chat))
+        # 内存模式下同样使用 config 传递上下文
+        workflow.add_node("agent", lambda state, config: agent(state, config, llm_chat=llm_chat, tool_config=tool_config,store=store, middleware_manager=middleware_manager))
+        workflow.add_node("call_tools", ParallelToolNode(tool_config.get_tools(), max_workers=5, middleware_manager=middleware_manager))
+        workflow.add_node("rewrite", lambda state: rewrite(state, llm_chat=llm_chat, middleware_manager=middleware_manager))
+        workflow.add_node("generate", lambda state: generate(state, llm_chat=llm_chat, middleware_manager=middleware_manager))
+        workflow.add_node("grade_documents", lambda state: grade_documents(state, llm_chat=llm_chat, middleware_manager=middleware_manager))
 
         workflow.add_edge(START, end_key="agent")
         workflow.add_conditional_edges(source="agent", path=tools_condition, path_map={"tools": "call_tools", END: END})
@@ -627,6 +878,10 @@ def create_graph(llm_chat, llm_embedding, tool_config: ToolConfig) -> StateGraph
 
 def graph_response(graph: StateGraph, user_input: str, config: dict, tool_config: ToolConfig, context: Context) -> None:
     """处理用户输入并输出响应，区分工具输出和大模型输出，支持多工具。
+
+    LangChain v1 变更说明：
+    - graph.stream() 的 context 参数在 v1 中仍受支持
+    - 旧版 config["configurable"] 模式仍可工作，同时支持新的 context 参数
 
     Args:
         graph: 状态图实例。
