@@ -614,6 +614,40 @@ def intent_router(
                 **mw_updates
             }
 
+        # ===== 关键词预检机制（修复 P0 问题）=====
+        # 问题：LLM 将明确的医疗查询误判为 general
+        # 解决：在 LLM 调用前进行关键词预检，快速识别医疗查询
+        MEDICAL_KEYWORDS = [
+            # 健康档案相关
+            "身体状况", "健康档案", "病历", "体检报告",
+            # 检验报告相关
+            "血常规", "尿常规", "生化", "生命体征",
+            "白细胞", "血红蛋白", "血小板", "红细胞",
+            "中性粒细胞", "淋巴细胞",
+            # 症状相关
+            "头疼", "头痛", "发烧", "发热", "咳嗽", "腹痛",
+            "恶心", "呕吐", "腹泻", "便秘",
+            # 医疗行为
+            "诊断", "治疗", "用药", "复查", "体检",
+            # 异常指标
+            "偏高", "偏低", "升高", "降低", "异常",
+        ]
+
+        # 快速关键词匹配
+        for keyword in MEDICAL_KEYWORDS:
+            if keyword in question:
+                logger.info(f"[{node_name}] 关键词匹配: '{keyword}'，强制路由到 medical")
+                return {
+                    "route_domain": "medical",
+                    "route_reason": f"检测到医疗关键词: {keyword}",
+                    "final_payload": None,
+                    "risk_level": None,
+                    "recommended_departments": None,
+                    "urgency_level": None,
+                    "medical_analysis_result": None,
+                    **mw_updates
+                }
+
         # 使用普通的 LLM 调用
         intent_chain = create_chain(llm_chat, Config.PROMPT_TEMPLATE_TXT_INTENT_ROUTER)
         
@@ -1934,6 +1968,10 @@ def route_after_intent(state: AgentState) -> Literal["rag_agent", "medical_agent
     """
     根据 route_domain 决定下一步路由。
 
+    增强功能：
+    - 后置校验机制：检测并修正 LLM 分类错误
+    - 医疗优先原则：当检测到医疗关键词时强制修正路由
+
     Args:
         state: 当前对话状态。
 
@@ -1941,6 +1979,37 @@ def route_after_intent(state: AgentState) -> Literal["rag_agent", "medical_agent
         Literal["rag_agent", "medical_agent"]: 下一步的目标节点。
     """
     route_domain = state.get("route_domain")
+    question = get_latest_question(state) or ""
+    
+    # ===== 后置校验机制（修复 P0 问题）=====
+    # 问题：LLM 可能将医疗查询误判为 general
+    # 解决：在路由决策后进行二次校验，修正明显误判
+    if route_domain == "general":
+        # 检查是否误判
+        MEDICAL_INDICATORS = [
+            # 健康档案相关
+            "身体状况", "健康档案", "病历", "体检报告",
+            # 检验报告相关
+            "血常规", "尿常规", "生化", "生命体征",
+            "白细胞", "血红蛋白", "血小板", "红细胞",
+            "中性粒细胞", "淋巴细胞",
+            # 症状相关
+            "头疼", "头痛", "发烧", "发热", "咳嗽", "腹痛",
+            "恶心", "呕吐", "腹泻", "便秘",
+            # 医疗行为
+            "诊断", "治疗", "用药", "复查", "体检",
+            # 异常指标
+            "偏高", "偏低", "升高", "降低", "异常",
+        ]
+        
+        for indicator in MEDICAL_INDICATORS:
+            if indicator in question:
+                logger.warning(
+                    f"[route_after_intent] 检测到误判，"
+                    f"关键词 '{indicator}' 存在但路由为 general，强制修正为 medical"
+                )
+                return "medical_agent"
+    
     logger.info(f"Routing after intent_router: {route_domain}")
     
     if route_domain == "medical":
