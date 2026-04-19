@@ -21,73 +21,122 @@
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart TB
-    subgraph Client["客户端层"]
-        WEB[Gradio WebUI]
-        CLI[命令行工具]
+    subgraph 表现层["🎨 表现层"]
+        WEB[Gradio WebUI<br/>gradio_ui.py :7860]
+        CLI[外部客户端<br/>Vite/移动端]
         SDK[Python SDK]
     end
     
-    subgraph Gateway["网关层"]
-        FASTAPI[FastAPI Server]
-        AUTH[认证中间件]
-        RATE[限流中间件]
+    subgraph 网关层["🌐 网关层"]
+        FASTAPI[FastAPI Server<br/>main.py :8000]
+        AUTH[认证中间件<br/>utils/auth.py]
     end
     
-    subgraph Agent["智能体层"]
-        GRAPH[StateGraph 工作流]
+    subgraph 应用层["⚙️ LangGraph Runtime"]
+        GRAPH[StateGraph 工作流<br/>ragAgent.py]
         
-        subgraph Nodes["节点"]
-            AGENT_NODE[Agent 节点]
-            TOOLS_NODE[工具节点]
-            GRADE_NODE[评分节点]
-            REWRITE_NODE[重写节点]
-            GEN_NODE[生成节点]
+        subgraph 节点["核心节点"]
+            ROUTER[intent_router<br/>意图路由]
+            RAG[agent<br/>RAG Agent 主控]
+            MED[medical_agent<br/>Medical Agent 主控]
+            TOOLS[ParallelToolNode<br/>并行工具执行]
+            GRADE[grade_documents<br/>文档相关性评分]
+            REWRITE[rewrite<br/>查询重写]
+            GEN[generate<br/>最终响应生成]
+            SAFETY[medical_safety_guard<br/>安全守卫]
+            TRIAGE[department_triage<br/>科室分诊]
         end
     end
     
-    subgraph Middleware["中间件层"]
-        LOG[日志追踪]
-        LIMIT[调用限制]
-        PII[PII 检测]
-        SUMMARY[对话摘要]
-        RETRY[工具重试]
+    subgraph 中间件层["🛡️ Middleware 层"]
+        LOG[LoggingMiddleware<br/>日志与性能追踪]
+        LIMIT[ModelCallLimitMiddleware<br/>调用次数限制]
+        PII[PIIDetectionMiddleware<br/>个人信息检测]
+        SUMMARY[SummarizationMiddleware<br/>对话历史摘要]
+        RETRY[ToolRetryMiddleware<br/>工具自动重试]
     end
     
-    subgraph Tools["工具层"]
-        RETRIEVE[检索工具]
-        CALC[计算器]
-        OTHER[其他工具]
+    subgraph 工具层["🔧 工具层"]
+        RET_SYS[health_record_retriever<br/>系统知识库检索]
+        RET_USER[user_medical_document_retriever<br/>用户文档检索]
+        CBC[analyze_cbc_report<br/>血常规分析]
+        BIO[analyze_biochemistry_report<br/>血生化分析]
+        URINE[analyze_urinalysis_report<br/>尿常规分析]
+        VITAL[analyze_vital_signs<br/>生命体征分析]
+        SYMPTOM[analyze_symptoms<br/>症状分析]
     end
     
-    subgraph Data["数据层"]
-        QDRANT[(Qdrant<br/>向量数据库)]
-        PG[(PostgreSQL<br/>会话存储)]
-        LLM[LLM 服务]
+    subgraph 数据层["📦 基础设施层"]
+        QDRANT[(Qdrant :6333<br/>向量数据库)]
+        PG[(PostgreSQL :5432<br/>会话持久化)]
+        MINERU[MinerU :8000<br/>GPU 解析服务]
+        LLM[LLM API<br/>OpenAI/Qwen/Ollama]
     end
     
-    Client --> Gateway
-    Gateway --> Agent
-    Agent --> Middleware
-    Middleware --> Tools
-    Tools --> Data
+    表现层 --> 网关层
+    网关层 --> 应用层
+    应用层 --> 中间件层
+    中间件层 --> 工具层
+    工具层 --> 数据层
     
-    style Client fill:#3498db,color:#fff
-    style Gateway fill:#2ecc71,color:#fff
-    style Agent fill:#9b59b6,color:#fff
-    style Middleware fill:#e67e22,color:#fff
-    style Tools fill:#f1c40f,color:#fff
-    style Data fill:#e74c3c,color:#fff
+    style 表现层 fill:#3498db,color:#ffffff
+    style 网关层 fill:#2ecc71,color:#000
+    style 应用层 fill:#9b59b6,color:#ffffff
+    style 中间件层 fill:#e67e22,color:#000
+    style 工具层 fill:#f39c12,color:#000
+    style 数据层 fill:#27ae60,color:#ffffff
 ```
 
 ### 1.2 核心设计原则
 
-| 原则 | 说明 |
-|------|------|
-| **模块化** | 各组件职责单一，松耦合设计 |
-| **可扩展** | 支持水平扩展和垂直扩展 |
-| **可观测** | 完整的日志、追踪和监控 |
-| **容错性** | 自动重试、降级和熔断机制 |
-| **安全性** | PII 检测、调用限制、权限控制 |
+| 原则 | 说明 | 实现位置 |
+|------|------|----------|
+| **双路由隔离** | General/Medical Agent 物理隔离，工具集独立 | `ragAgent.py` → `ToolConfig` |
+| **无状态 Middleware** | 实例仅存配置，运行时数据存 AgentState | `utils/middleware.py` |
+| **可观测性** | 完整的日志追踪、节点耗时统计、LangSmith 集成 | `LoggingMiddleware` + LangSmith |
+| **容错性** | 断路器防死循环、重试机制、降级策略 | `ToolConfig` + `ToolRetryMiddleware` |
+| **安全性** | PII 检测、user_id 防伪造、工具访问控制 | `auth.py` + `PIIDetectionMiddleware` |
+
+### 1.3 双路由架构详解
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart TD
+    Start([用户输入]) --> Router{Intent Router<br/>双层判断}
+    
+    Router -->|"route=general"| General[RAG Agent 路由]
+    Router -->|"route=medical"| Medical[Medical Agent 路由]
+    
+    subgraph General["通用路由（受限工具集）"]
+        G_Agent[agent 节点] --> G_Tools{需要检索?}
+        G_Tools -->|Yes| G_Call[call_tools<br/>仅 health_record_retriever]
+        G_Tools -->|No| G_Grade{grade_documents}
+        G_Call --> G_Grade
+        G_Grade -->|relevant| G_Gen[generate]
+        G_Grade -->|irrelevant| G_Rewrite[rewrite]
+        G_Rewrite --> G_Agent
+    end
+    
+    subgraph Medical["医疗路由（完整工具集）"]
+        M_Agent[medical_agent] --> M_Tools{需要工具?}
+        M_Tools -->|Yes| M_Call[call_tools<br/>7种医疗工具并行]
+        M_Tools -->|No| M_Analysis{分析结果}
+        M_Call --> M_Analysis
+        M_Analysis --> M_Triage[department_triage<br/>科室分诊]
+        M_Triage --> M_Safety{medical_safety_guard}
+        M_Safety -->|safe| M_Gen[generate]
+        M_Safety -->|high risk| M_Warning[风险警告+免责声明]
+        M_Warning --> M_Gen
+    end
+    
+    G_Gen --> End([返回响应])
+    M_Gen --> End
+    
+    style Start fill:#2ea44f,color:#ffffff
+    style End fill:#2ea44f,color:#ffffff
+    style Router fill:#ffc107,color:#000000
+    style M_Safety fill:#f44336,color:#ffffff
+```
 
 ---
 
@@ -95,88 +144,51 @@ flowchart TB
 
 ### 2.1 技术栈总览
 
-| 层级 | 技术选型 | 选型理由 |
-|------|----------|----------|
-| **工作流引擎** | LangGraph | 灵活的状态图，支持复杂工作流 |
-| **LLM 框架** | LangChain v1 | 丰富的集成，Middleware 支持 |
-| **向量数据库** | Qdrant | 高性能，支持混合检索 |
-| **关系数据库** | PostgreSQL | 可靠性高，支持 LangGraph 持久化 |
-| **API 框架** | FastAPI | 高性能，原生异步支持 |
-| **Web 框架** | Gradio | 快速构建 ML 应用界面 |
-| **文档解析** | MinerU | GPU 加速，高保真 Markdown 输出 |
-| **容器编排** | Docker Compose | 简单易用，适合中小规模部署 |
+| 层级 | 技术选型 | 版本要求 | 选型理由 |
+|------|----------|----------|----------|
+| **工作流引擎** | LangGraph | 1.0+ | 灵活的状态图，支持条件路由和循环 |
+| **LLM 框架** | LangChain | 1.0+ | 丰富的集成，原生 Tool Calling 支持 |
+| **向量数据库** | Qdrant | 1.12+ | 原生混合检索(BM25+Dense)，高性能 |
+| **关系数据库** | PostgreSQL | 15+ | langgraph-checkpoint-postgres 持久化 |
+| **API 框架** | FastAPI | 0.100+ | 高性能，原生异步，Swagger 自动文档 |
+| **Web 前端** | Gradio | 4.0+ | 快速构建 ML 应用界面，内置认证 |
+| **文档解析** | MinerU | latest | GPU 加速，高保真 Markdown 输出 |
+| **容器编排** | Docker Compose | V2 | 简单易用，适合中小规模部署 |
 
-### 2.2 LangGraph 选型分析
+### 2.2 LLM 提供商支持矩阵
 
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart LR
-    subgraph 传统方案
-        A1[链式调用]
-        A2[固定流程]
-        A3[难以扩展]
+    subgraph Providers["支持的 LLM 提供商"]
+        O[OpenAI<br/>gpt-4o]
+        Q[通义千问<br/>qwen-plus]
+        OL[Ollama<br/>qwen2.5:32b]
+        OA[OneAPI<br/>自定义网关]
     end
     
-    subgraph LangGraph方案
-        B1[状态图]
-        B2[灵活路由]
-        B3[条件分支]
-        B4[循环重试]
+    subgraph Capabilities["能力支持"]
+        C1[Chat Model ✅]
+        C2[Embedding ✅]
+        C3[Rerank ⚠️ 仅Qwen]
+        C4[流式输出 ✅]
     end
     
-    A1 -.->|升级| B1
-    style LangGraph方案 fill:#2ecc71,color:#fff
-    style 传统方案 fill:#e74c3c,color:#fff
+    O & Q & OL & OA --> C1
+    O & Q & OL & OA --> C2
+    Q --> C3
+    O & Q & OL & OA --> C4
+    
+    style Providers fill:#0969da,color:#ffffff
+    style Capabilities fill:#2ea44f,color:#ffffff
 ```
 
-**LangGraph 优势：**
-
-| 特性 | 说明 |
-|------|------|
-| 状态管理 | 内置状态传递和持久化 |
-| 条件路由 | 支持基于状态的动态路由 |
-| 循环支持 | 原生支持循环和重试逻辑 |
-| 可观测性 | 集成 LangSmith 追踪 |
-| 人工介入 | 支持 human-in-the-loop |
-
-### 2.3 向量数据库选型
-
-| 特性 | Qdrant | ChromaDB | Milvus |
-|------|--------|----------|--------|
-| 性能 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
-| 混合检索 | ✅ | ❌ | ✅ |
-| 部署复杂度 | 低 | 低 | 高 |
-| 元数据过滤 | ✅ | ✅ | ✅ |
-| 社区活跃度 | 高 | 高 | 高 |
-
-**选择 Qdrant 的理由：**
-- 原生支持 BM25 + 向量混合检索
-- 单机部署简单，性能优异
-- Rust 实现，内存占用低
-
-### 2.4 LLM 提供商支持
-
-```python
-# 统一的 LLM 接口抽象
-class LLMProvider:
-    """LLM 提供商抽象基类"""
-    
-    def get_chat_model(self) -> BaseChatModel:
-        """获取聊天模型"""
-        pass
-    
-    def get_embeddings(self) -> Embeddings:
-        """获取 Embedding 模型"""
-        pass
-
-# 支持的提供商
-PROVIDERS = {
-    "openai": OpenAIProvider,
-    "qwen": QwenProvider,
-    "ollama": OllamaProvider,
-    "oneapi": OneAPIProvider,
-}
-```
+| 提供商 | Chat Model | Embedding | Rerank | 适用场景 |
+|--------|------------|-----------|--------|----------|
+| `openai` | gpt-4o | text-embedding-3-small | - | 生产环境首选 |
+| `qwen` | qwen-plus | text-embedding-v1 | qwen3-rerank | **推荐**，完整链路 |
+| `ollama` | qwen2.5:32b | bge-m3:latest | - | 本地离线开发 |
+| `oneapi` | qwen-max | 自定义 | - | 企业统一网关 |
 
 ---
 
@@ -188,249 +200,281 @@ PROVIDERS = {
 %%{init: {'theme': 'dark'}}%%
 flowchart TB
     subgraph Core["核心模块"]
-        AGENT[ragAgent_v1.py<br/>Agent 工作流]
-        PIPELINE[pipeline.py<br/>处理流水线]
+        AGENT[ragAgent.py<br/>LangGraph 编译 + 节点函数]
+        PIPE[pipeline.py<br/>文档处理流水线]
+        CONFIG[config.py<br/>统一配置兼容层]
     end
     
     subgraph API["API 模块"]
-        MAIN[main_v1.py<br/>FastAPI 服务]
-        WEBUI[webUI.py<br/>Gradio 界面]
+        MAIN[main.py<br/>FastAPI 服务入口]
+        GRADIO[gradio_ui.py<br/>Gradio Web 前端]
     end
     
     subgraph Utils["工具模块"]
-        CONFIG[config.py<br/>配置管理]
-        LLMS[llms.py<br/>LLM 封装]
-        TOOLS[tools_config.py<br/>检索工具]
-        MW[middleware.py<br/>中间件]
+        LLMS[llms.py<br/>LLM 客户端工厂]
+        TOOLS[tools_config.py<br/>工具工厂(物理隔离)]
+        RETRIEVER[retriever.py<br/>两阶段混合检索器]
+        MW[middleware.py<br/>Middleware 体系(5种)]
+        AUTH[auth.py<br/>用户认证(3方式)]
+        DOC_PROC[document_processor.py<br/>用户文档处理器]
+    end
+    
+    subgraph ConfigSub["配置子模块 utils/config/"]
+        BASE[base_config.py<br/>基础配置 + 组合类]
+        LLM_CFG[llm_config.py<br/>LLM 供应商配置]
+        VS_CFG[vectorstore_config.py<br/>向量库配置]
+        MW_CFG[middleware_config.py<br/>Middleware 配置]
+        SVC_CFG[service_config.py<br/>服务配置]
+    end
+    
+    subgraph Medical["医疗分析子模块 utils/medical_analysis/"]
+        BASE_ANA[base_analyzer.py<br/>抽象基类]
+        CBC[cbc_analyzer.py<br/>血常规(15+指标)]
+        BIO[biochemistry_analyzer.py<br/>血生化(20+指标)]
+        URINE[urinalysis_analyzer.py<br/>尿常规(10+指标)]
+        VS[vital_signs_analyzer.py<br/>生命体征]
+        SYMPTOM[symptom_analyzer.py<br/>症状分析]
+        MT[medical_tools.py<br/>LangChain Tool 封装]
     end
     
     subgraph Data["数据模块"]
-        VS[vectorSave.py<br/>向量存储]
+        VS_ENGINE[vectorSave.py<br/>向量存储引擎 v2]
         MC[mineru_client.py<br/>MinerU 客户端]
-        MS[markdown_splitter.py<br/>文档切分]
     end
     
     API --> Core
     Core --> Utils
     Core --> Data
-    Data --> Utils
+    Utils --> ConfigSub
+    Utils --> Medical
     
     style Core fill:#9b59b6,color:#fff
     style API fill:#3498db,color:#fff
-    style Utils fill:#2ecc71,color:#fff
-    style Data fill:#e67e22,color:#fff
+    style Utils fill:#2ea44f,color:#000
+    style Medical fill:#e67e22,color:#000
+    style Data fill:#f39c12,color:#000
 ```
 
 ### 3.2 核心模块详解
 
-#### 3.2.1 RAG Agent (ragAgent_v1.py)
+#### 3.2.1 ragAgent.py — Agent 核心逻辑
+
+**文件定位**: 整个系统的大脑，包含 LangGraph StateGraph 编排和所有节点函数。
+
+**关键组件:**
 
 ```python
-class RAGAgent:
+class AgentState(MessagesState):
     """
-    RAG Agent 主类，基于 LangGraph StateGraph 构建。
+    对话状态定义。
     
-    Attributes:
-        graph: StateGraph 工作流实例
-        checkpointer: 会话持久化存储
-        middleware_chain: 中间件链
+    设计要点:
+    - 继承 MessagesState 复用消息管理
+    - Annotated[int, operator.add] 实现跨节点累加
+    - 业务字段和 Middleware 追踪字段清晰分离
     """
+    # ===== 业务字段 =====
+    relevance_score: Optional[str] = None       # 检索相关性评分 (yes/no)
+    rewrite_count: int = 0                       # 查询重写次数（防死循环）
+    route_domain: Optional[Literal["general", "medical"]] = None
+    route_reason: Optional[str] = None          # 路由原因说明
     
-    def __init__(self, config: AgentConfig):
-        """
-        初始化 RAG Agent。
-        
-        Args:
-            config: Agent 配置对象
-        """
-        self._build_graph()
-        self._setup_middleware()
+    # 医疗建议字段
+    recommended_departments: Optional[List[str]] = None   # 推荐科室列表
+    urgency_level: Optional[Literal["routine", "urgent", "emergency"]] = None
+    risk_level: Optional[Literal["low","medium","high","critical"]] = None
+    final_payload: Optional[dict] = None                # 最终输出载荷
     
-    def _build_graph(self):
-        """构建 StateGraph 工作流"""
-        self.graph = StateGraph(AgentState)
-        self.graph.add_node("agent", self._agent_node)
-        self.graph.add_node("tools", self._tools_node)
-        self.graph.add_node("grade", self._grade_node)
-        self.graph.add_node("rewrite", self._rewrite_node)
-        self.graph.add_node("generate", self._generate_node)
-        
-        # 定义边和条件路由
-        self.graph.add_edge(START, "agent")
-        self.graph.add_conditional_edges("agent", self._tools_condition)
-        # ...
+    # ===== Middleware 追踪字段 =====
+    mw_model_call_count: Annotated[int, operator.add] = 0
+    mw_model_total_time: Annotated[float, operator.add] = 0.0
+    mw_tool_total_time: Annotated[float, operator.add] = 0.0
+    mw_pii_detected: bool = False
+    mw_force_stop: bool = False
+    mw_node_timings: Optional[dict] = None
+
+
+class ToolConfig:
+    """
+    工具配置类 - 实施物理工具隔离。
     
-    def invoke(self, query: str, config: RunnableConfig = None) -> dict:
-        """
-        执行查询。
-        
-        Args:
-            query: 用户查询
-            config: 运行配置
-            
-        Returns:
-            dict: 包含响应和元数据的结果
-        """
-        pass
+    安全约束:
+    - rag_tools: 仅包含 health_record_retriever（1个）
+    - medical_tools: 包含完整工具集（7个）
+    """
+
+
+class ParallelToolNode:
+    """
+    并行工具执行节点。
+    
+    特性:
+    - ThreadPoolExecutor 并行执行多工具调用
+    - Middleware before_tool / after_tool 钩子
+    - ToolRetryMiddleware 指数退避重试
+    - as_completed(timeout=) 超时控制
+    """
 ```
 
-#### 3.2.2 配置管理 (utils/config.py)
+**节点函数一览:**
 
-```python
-class Config:
-    """
-    统一配置管理类。
+| 节点函数 | 类型 | 功能 | 关键逻辑 |
+|----------|------|------|----------|
+| `intent_router()` | 条件路由 | 意图分类 | 关键词预检(30+) → LLM 分类 |
+| `agent()` | model | RAG Agent 主控 | 决定是否调用检索工具 |
+| `medical_agent()` | model | Medical Agent 主控 | 决定调用哪些医疗工具 |
+| `grade_documents()` | model | 文档相关性评分 | yes→生成 / no→重写 |
+| `rewrite()` | model | 查询改写优化 | 结合上下文重写查询 |
+| `generate()` | model | 最终响应生成 | 基于工具结果生成回复 |
+| `ParallelToolNode.__call__()` | tool | 并行工具执行 | ThreadPoolExecutor |
+| `medical_safety_guard()` | 条件路由 | 安全守卫 | 风险拦截 + 免责声明 |
+| `department_triage()` | 条件路由 | 科室分诊 | 推荐科室 + 紧急度 |
+
+#### 3.2.2 main.py — FastAPI 服务入口
+
+**核心接口:**
+
+| 方法 | 路径 | 功能 | 认证方式 |
+|------|------|------|----------|
+| GET | `/health` | 健康检查 | 无需认证 |
+| POST | `/v1/chat/completions` | 聊天完成 | API Key / JWT / 开发模式 |
+| POST | `/v1/documents/upload` | 文档上传 | API Key / JWT |
+| GET | `/v1/documents` | 文档列表 | API Key / JWT |
+| DELETE | `/v1/documents/{md5}` | 删除文档 | API Key / JWT |
+| GET | `/v1/documents/stats` | 文档统计 | API Key / JWT |
+
+**响应格式增强:**
+- 流式响应：SSE (text/event-stream)
+- 非流式响应：标准 JSON
+- **医疗扩展**：仅 medical 路由返回 `medical` 字段（risk_level, disclaimer, structured_data）
+
+#### 3.2.3 utils/middleware.py — Middleware 体系
+
+**五种 Middleware 对比:**
+
+| Middleware 类 | 适用节点类型 | 核心功能 | 可配置项 | 默认值 |
+|---------------|-------------|----------|----------|--------|
+| `LoggingMiddleware` | model + tool | 日志与性能追踪 | - | - |
+| `ModelCallLimitMiddleware` | model | 模型调用次数限制 | `max_calls` | 10 |
+| `PIIDetectionMiddleware` | model | PII 个人信息检测 | `mode` (detect/warn/mask/block) | warn |
+| `SummarizationMiddleware` | model | 对话历史截断 | `max_messages`, `keep_recent` | 20, 5 |
+| `ToolRetryMiddleware` | tool | 工具调用自动重试 | `max_retries`, `backoff_factor` | 2, 0.5 |
+
+**洋葱模型执行顺序:**
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Req as 请求
+    participant MW1 as LoggingMW
+    participant MW2 as CallLimitMW
+    participant MW3 as PIIMW
+    participant Node as 节点函数
     
-    配置优先级：
-    1. 环境变量（最高）
-    2. .env 文件
-    3. 代码默认值（最低）
-    """
+    Req->>MW1: before_model()
+    MW1->>MW2: before_model()
+    MW2->>MW3: before_model()
+    MW3->>Node: 执行业务逻辑
+    Node-->>MW3: after_model()
+    MW3-->>MW2: after_model()
+    MW2-->>MW1: after_model()
+    MW1-->>Req: 返回结果
     
-    # LLM 配置
-    LLM_TYPE: str = "qwen"
-    DASHSCOPE_API_KEY: str = ""
-    OPENAI_API_KEY: str = ""
-    
-    # MinerU 配置
-    MINERU_API_URL: str = "http://localhost:8000"
-    MINERU_TIMEOUT: int = 300
-    
-    # Qdrant 配置
-    QDRANT_URL: str = "http://127.0.0.1:6333"
-    QDRANT_COLLECTION_NAME: str = "knowledge_base_v2"
-    
-    @classmethod
-    def validate_config(cls) -> dict:
-        """
-        验证配置完整性。
-        
-        Returns:
-            dict: 验证结果，包含 valid, issues 等字段
-        """
-        pass
+    Note over MW3,MW3: after hooks 逆序执行
 ```
 
-#### 3.2.3 Middleware (utils/middleware.py)
+#### 3.2.4 utils/tools_config.py — 工具工厂
 
-```python
-class MiddlewareManager:
-    """
-    中间件管理器，协调多个中间件的执行。
+**物理隔离策略:**
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    subgraph RAG["RAG Agent 工具集（受限）"]
+        T1["health_record_retriever<br/>✅ 系统知识库检索"]
+    end
     
-    执行顺序：
-    请求 → Logging → PII → Limit → Agent → Summary → 响应
-    """
+    subgraph Medical["Medical Agent 工具集（完整）"]
+        T1
+        T2["user_medical_document_retriever<br/>用户文档检索"]
+        T3["analyze_cbc_report<br/>血常规分析"]
+        T4["analyze_biochemistry_report<br/>血生化分析"]
+        T5["analyze_urinalysis_report<br/>尿常规分析"]
+        T6["analyze_vital_signs<br/>生命体征分析"]
+        T7["analyze_symptoms<br/>症状分析"]
+    end
     
-    def __init__(self, middlewares: list[Middleware]):
-        """
-        初始化中间件管理器。
-        
-        Args:
-            middlewares: 中间件列表
-        """
-        self.middlewares = middlewares
-    
-    def process_request(self, request: Request) -> Request:
-        """处理请求"""
-        for mw in self.middlewares:
-            request = mw.before_invoke(request)
-        return request
-    
-    def process_response(self, response: Response) -> Response:
-        """处理响应"""
-        for mw in reversed(self.middlewares):
-            response = mw.after_invoke(response)
-        return response
+    style T1 fill:#2ea44f,color:#ffffff
+    style T2 fill:#0969da,color:#ffffff
+    style T3 fill:#0969da,color:#ffffff
+    style T4 fill:#0969da,color:#ffffff
+    style T5 fill:#0969da,color:#ffffff
+    style T6 fill:#0969da,color:#ffffff
+    style T7 fill:#0969da,color:#ffffff
 ```
 
-### 3.3 数据模块详解
+#### 3.2.5 utils/retriever.py — 两阶段混合检索器
 
-#### 3.3.1 向量存储 (vectorSave.py)
+**检索流程:**
 
-```python
-class VectorStoreV2:
-    """
-    增强向量存储引擎，支持元数据存储和混合检索。
-    
-    Features:
-        - 支持带元数据的向量存储
-        - 支持 BM25 + 向量混合检索
-        - 支持增量更新和删除
-    """
-    
-    def upsert_with_metadata(
-        self,
-        texts: list[str],
-        metadatas: list[dict],
-        use_context_prefix: bool = True
-    ) -> list[str]:
-        """
-        带元数据的向量存储。
-        
-        Args:
-            texts: 文本列表
-            metadatas: 元数据列表
-            use_context_prefix: 是否添加上下文前缀
-            
-        Returns:
-            list[str]: 向量 ID 列表
-        """
-        pass
-    
-    def hybrid_search(
-        self,
-        query: str,
-        top_k: int = 5,
-        sparse_weight: float = 0.3
-    ) -> list[SearchResult]:
-        """
-        混合检索（BM25 + 向量）。
-        
-        Args:
-            query: 查询文本
-            top_k: 返回数量
-            sparse_weight: BM25 权重
-            
-        Returns:
-            list[SearchResult]: 检索结果
-        """
-        pass
+```
+query → [Stage 1: Qdrant Hybrid Search BM25+Dense Top-5] 
+      → [Stage 2: DashScope Rerank Top-3] 
+      → 最终文档列表
 ```
 
-#### 3.3.2 文档切分 (markdown_splitter.py)
+#### 3.2.6 utils/auth.py — 认证模块
 
-```python
-class MarkdownSplitter:
-    """
-    两阶段语义切分器。
+**认证优先级链:**
+
+```
+API Key (X-API-Key Header) → JWT Token (Authorization Bearer) → 开发模式 (userId from body)
+```
+
+**安全约束:** user_id 必须从认证体系获取，禁止从请求体直接读取（防止伪造）
+
+### 3.3 医疗分析子模块
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+classDiagram
+    class BaseMedicalAnalyzer {
+        <<abstract>>
+        +db: MedicalReferenceDatabase
+        +analyze(report_text) BaseAnalysisResult
+        +parse_report(report_text) Dict
+        +calculate_risk_level(count) RiskLevel
+    }
     
-    阶段A: 按 Markdown 标题层级切分
-    阶段B: 对超长段落递归切分
-    """
+    class CBCAnalyzer {
+        +analyze(report_text, gender) CBCResult
+        指标数: 15+
+    }
     
-    def split_text(self, text: str) -> list[Chunk]:
-        """
-        切分 Markdown 文本。
-        
-        Args:
-            text: Markdown 文本
-            
-        Returns:
-            list[Chunk]: 切分结果，包含内容和元数据
-        """
-        # 阶段A: 标题切分
-        chunks = self._split_by_headers(text)
-        
-        # 阶段B: 递归切分超长段落
-        final_chunks = []
-        for chunk in chunks:
-            if len(chunk.content) > self.chunk_size:
-                final_chunks.extend(self._recursive_split(chunk))
-            else:
-                final_chunks.append(chunk)
-        
-        return final_chunks
+    class BiochemistryAnalyzer {
+        +analyze(report_text, gender) BiochemResult
+        指标数: 20+
+    }
+    
+    class UrinalysisAnalyzer {
+        +analyze(report_text) UriResult
+        指标数: 10+
+    }
+    
+    class VitalSignsAnalyzer {
+        +analyze(temp, hr, sbp, dbp) VSResult
+        参数: 体温/心率/血压
+    }
+    
+    class SymptomAnalyzer {
+        +analyze(symptom_text) SymptomResult
+    }
+    
+    BaseMedicalAnalyzer <|-- CBCAnalyzer
+    BaseMedicalAnalyzer <|-- BiochemistryAnalyzer
+    BaseMedicalAnalyzer <|-- UrinalysisAnalyzer
+    BaseMedicalAnalyzer <|-- VitalSignsAnalyzer
+    BaseMedicalAnalyzer <|-- SymptomAnalyzer
 ```
 
 ---
@@ -442,179 +486,163 @@ class MarkdownSplitter:
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart LR
-    FILES[原始文件] --> MINERU[MinerU 解析]
-    MINERU --> MD[Markdown]
-    MD --> SPLIT[两阶段切分]
-    SPLIT --> CHUNKS[Chunks + 元数据]
-    CHUNKS --> EMBED[Embedding]
-    EMBED --> QDRANT[(Qdrant)]
+    FILES[原始文件<br/>PDF/DOCX/PPTX] --> MINERU[MinerU GPU 解析]
+    MINERU --> MD[Markdown 输出]
+    MD --> SPLIT[MarkdownSplitter<br/>两阶段切分]
     
-    style FILES fill:#27ae60,color:#fff
-    style QDRANT fill:#e74c3c,color:#fff
+    subgraph 两阶段切分
+        A[阶段A: 标题树提取] --> B[阶段B: RecursiveCharacterTextSplitter]
+    end
+    
+    SPLIT --> CHUNKS[Chunks + 元数据]
+    CHUNKS --> EMBED[Embedding API<br/>批量处理]
+    EMBED --> QDRANT[(Qdrant<br/>混合检索集合)]
+    
+    style FILES fill:#2ea44f,color:#ffffff
+    style QDRANT fill:#2ea44f,color:#ffffff
 ```
 
-### 4.2 检索流程
+### 4.2 用户文档处理流程
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    UPLOAD[文件上传] --> VALIDATE[类型验证 + MD5 去重]
+    VALIDATE --> PARSE[MinerU 解析为 Markdown]
+    PARSE --> SPLIT[语义切分]
+    SPLIT --> VECTOR[向量化]
+    VECTOR --> STORE[(Qdrant 用户集合<br/>user_id 隔离)]
+    STORE --> META[(PostgreSQL 元数据记录)]
+    
+    style UPLOAD fill:#2ea44f,color:#ffffff
+    style META fill:#2ea44f,color:#ffffff
+```
+
+### 4.3 检索流程
 
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart TD
-    QUERY[用户查询] --> RETRIEVE[混合检索<br/>BM25 + 向量]
-    RETRIEVE --> DOCS[Top-K 文档]
-    DOCS --> RERANK[Rerank 精排]
-    RERANK --> FINAL[Top-N 文档]
-    FINAL --> GRADE{相关性评分}
-    GRADE -->|yes| CONTEXT[构建上下文]
-    GRADE -->|no| REWRITE[重写查询]
-    REWRITE --> RETRIEVE
-    CONTEXT --> LLM[LLM 生成]
+    QUERY[用户查询] --> HYBRID[Qdrant 混合检索<br/>BM25 + Dense 向量]
+    HYBRID --> TOP5[Top-5 候选文档]
+    TOP5 --> RERANK[DashScope Rerank 精排]
+    RERANK --> TOP3[Top-3 最终文档]
+    TOP3 --> GRADE{LLM 相关性评分}
+    GRADE -->|relevant| CONTEXT[构建上下文]
+    GRADE -->|irrelevant| REWRITE[查询重写]
+    REWRITE --> HYBRID
+    CONTEXT --> LLM[LLM 生成回复]
     
-    style QUERY fill:#27ae60,color:#fff
-    style LLM fill:#e74c3c,color:#fff
+    style QUERY fill:#2ea44f,color:#ffffff
+    style LLM fill:#2ea44f,color:#ffffff
+    style GRADE fill:#ffc107,color:#000000
 ```
 
-### 4.3 Agent 工作流状态机
+### 4.4 完整请求处理时序
 
-```python
-from typing import TypedDict, Annotated
-
-class AgentState(TypedDict):
-    """Agent 状态定义"""
-    messages: Annotated[list, "消息历史"]
-    documents: Annotated[list, "检索文档"]
-    relevance: Annotated[str, "相关性评分"]
-    rewrite_count: Annotated[int, "重写次数"]
-    tool_calls: Annotated[list, "工具调用记录"]
-
-# 状态转换规则
-TRANSITIONS = {
-    "agent": {
-        "tools": "tools_condition",  # 条件：是否调用工具
-        "end": "no_tools"            # 无工具调用则结束
-    },
-    "tools": {
-        "grade": "is_retrieve_tool",  # 检索工具 → 评分
-        "generate": "is_other_tool"   # 其他工具 → 生成
-    },
-    "grade": {
-        "generate": "relevant",       # 相关 → 生成
-        "rewrite": "not_relevant"     # 不相关 → 重写
-    },
-    "rewrite": {
-        "agent": "always"             # 重写后回到 Agent
-    },
-    "generate": {
-        "end": "always"               # 生成后结束
-    }
-}
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User as 用户
+    participant API as FastAPI main.py
+    participant Auth as auth.py
+    participant Graph as LangGraph ragAgent.py
+    participant Router as intent_router
+    participant Agent as agent / medical_agent
+    participant Tools as ParallelToolNode
+    participant Vector as Qdrant
+    participant LLM as LLM Service
+    
+    User->>API: POST /v1/chat/completions
+    API->>Auth: get_current_user_id()
+    Auth-->>API: user_id (安全获取)
+    API->>Graph: stream/invoke(config)
+    Graph->>Router: 意图识别
+    Router-->>Graph: route_domain + route_reason
+    
+    alt general 路由
+        Graph->>Agent: RAG Agent
+        Agent->>Tools: call_tools (retriever only)
+        Tools->>Vector: 混合检索
+        Vector-->>Tools: 文档片段
+        Tools-->>Agent: ToolMessage
+        Agent->>Graph: grade_documents → generate
+    else medical 路由
+        Graph->>Agent: Medical Agent
+        Agent->>Tools: call_tools (7 tools parallel)
+        Tools->>Vector: 检索系统知识库 + 用户文档
+        Tools->>LLM: 血常规/血生化等分析
+        Tools-->>Agent: 多个 ToolMessage
+        Agent->>Graph: department_triage → safety_guard → generate
+    end
+    
+    Graph-->>API: final_payload + events
+    API-->>User: JSON / SSE Stream
 ```
 
 ---
 
 ## 五、API 设计
 
-### 5.1 API 架构
+### 5.1 接口规范
 
-```mermaid
-%%{init: {'theme': 'dark'}}%%
-flowchart LR
-    CLIENT[客户端] --> LB[负载均衡]
-    LB --> API1[API 实例 1]
-    LB --> API2[API 实例 2]
-    
-    API1 --> AGENT[Agent 服务]
-    API2 --> AGENT
-    
-    AGENT --> QDRANT[(Qdrant)]
-    AGENT --> PG[(PostgreSQL)]
-    AGENT --> LLM[LLM API]
-    
-    style CLIENT fill:#3498db,color:#fff
-    style AGENT fill:#9b59b6,color:#fff
-```
-
-### 5.2 接口规范
-
-#### 5.2.1 聊天接口
+#### 5.1.1 聊天接口
 
 ```yaml
 POST /v1/chat/completions
 Content-Type: application/json
 
-Request:
-  messages: array[Message]    # 消息历史
-  stream: boolean             # 是否流式
-  userId: string              # 用户 ID
-  conversationId: string      # 会话 ID
-  temperature: number         # 温度参数
-  max_tokens: number          # 最大 token 数
+Headers:
+  X-API-Key: string           # 服务间调用认证
+  Authorization: Bearer xxx   # 前端用户认证
 
-Response:
-  id: string                  # 响应 ID
-  object: string              # 对象类型
-  created: number             # 创建时间戳
-  choices: array[Choice]      # 响应选项
-  usage: Usage                # Token 使用统计
+Request Body:
+  messages: array[Message]     # 对话消息列表
+  stream: boolean              # 是否流式输出 (默认 false)
+  userId: string               # 用户 ID (仅开发模式)
+  conversationId: string       # 会话 ID (可选, 默认 default)
+
+Response (非流式):
+  id: string                   # 响应唯一标识
+  choices: array[Choice]       # 回复选项
+  medical: MedicalExtension?   # 医疗扩展信息 (仅 medical 路由)
+    risk_level: string         # low/medium/high/critical
+    risk_warning: string       # 风险警告文本
+    disclaimer: string         # 免责声明
+    structured_data: object?   # 结构化医疗数据
+      recommended_departments: string[]
+      urgency_level: string    # routine/urgent/emergency
+      triage_confidence: float # 分诊置信度 0.0~1.0
 ```
 
-#### 5.2.2 响应格式
+#### 5.1.2 文档管理接口
 
-```typescript
-// 非流式响应
-interface ChatCompletion {
-  id: string;
-  object: "chat.completion";
-  created: number;
-  choices: [{
-    index: number;
-    message: {
-      role: "assistant";
-      content: string;
-    };
-    finish_reason: "stop" | "length" | "tool_calls";
-  }];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
-// 流式响应 (SSE)
-interface ChatCompletionChunk {
-  id: string;
-  object: "chat.completion.chunk";
-  created: number;
-  choices: [{
-    index: number;
-    delta: {
-      role?: "assistant";
-      content?: string;
-    };
-    finish_reason: "stop" | "length" | null;
-  }];
-}
+```yaml
+POST /v1/documents/upload
+  上传用户医疗文档
+  Form: file, doc_type(blood_report/biochemical/urinalysis/vital_signs/other)
+  
+GET /v1/documents?limit=10&offset=0
+  获取当前用户的文档列表
+  
+DELETE /v1/documents/{file_md5}
+  按 MD5 删除指定文档
+  
+GET /v1/documents/stats
+  获取文档统计信息 (总数/各类型数量/总大小)
 ```
 
-### 5.3 错误处理
+### 5.2 错误码规范
 
-```python
-class APIError(Exception):
-    """API 错误基类"""
-    
-    def __init__(self, code: str, message: str, status_code: int = 500):
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-
-# 错误码定义
-ERROR_CODES = {
-    "INVALID_REQUEST": ("invalid_request", 400),
-    "AUTHENTICATION_ERROR": ("authentication_error", 401),
-    "RATE_LIMIT_EXCEEDED": ("rate_limit_exceeded", 429),
-    "MODEL_OVERLOADED": ("model_overloaded", 503),
-    "INTERNAL_ERROR": ("internal_error", 500),
-}
-```
+| HTTP 状态码 | 错误码 | 说明 |
+|-------------|--------|------|
+| 400 | INVALID_REQUEST | 请求参数无效 |
+| 401 | AUTHENTICATION_ERROR | 认证失败 |
+| 403 | FORBIDDEN | 权限不足 |
+| 404 | DOCUMENT_NOT_FOUND | 文档不存在 |
+| 429 | RATE_LIMIT_EXCEEDED | 频率限制 |
+| 500 | INTERNAL_ERROR | 内部服务器错误 |
+| 503 | MODEL_OVERLOADED | LLM 服务过载 |
 
 ---
 
@@ -627,13 +655,18 @@ ERROR_CODES = {
 flowchart TB
     subgraph Server["单机服务器"]
         subgraph Docker["Docker 容器"]
-            Q[Qdrant]
-            PG[PostgreSQL]
+            Q[Qdrant :6333]
+            PG[PostgreSQL :5432]
         end
         
         subgraph App["应用进程"]
-            API[FastAPI]
-            WEB[Gradio]
+            API[FastAPI :8000]
+            WEB[Gradio :7860]
+        end
+        
+        subgraph External["外部服务（可选）"]
+            M[MinerU GPU :8000]
+            L[LLM API Cloud]
         end
     end
     
@@ -641,8 +674,11 @@ flowchart TB
     USER --> WEB
     API --> Q
     API --> PG
+    API --> L
+    API --> M
     
     style Server fill:#3498db,color:#fff
+    style External fill:#e67e22,color:#000
 ```
 
 ### 6.2 分布式部署架构
@@ -650,21 +686,21 @@ flowchart TB
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart TB
-    subgraph Cloud["云服务"]
+    subgraph Internet["公网 HTTPS"]
         CDN[CDN]
-        LB[负载均衡]
+        LB[负载均衡 Nginx/ALB]
     end
     
     subgraph AppCluster["应用集群"]
-        API1[API 实例 1]
-        API2[API 实例 2]
-        API3[API 实例 3]
+        API1[FastAPI :8000]
+        API2[FastAPI :8000]
+        API3[FastAPI :8000]
     end
     
     subgraph DataCluster["数据集群"]
-        Q1[Qdrant 节点 1]
-        Q2[Qdrant 节点 2]
-        PG1[PG 主节点]
+        Q1[Qdrant 主节点]
+        Q2[Qdrant 从节点]
+        PG1[PG 主节点 :5432]
         PG2[PG 从节点]
     end
     
@@ -680,41 +716,22 @@ flowchart TB
     PG1 --> PG2
     API1 & API2 & API3 --> M1 & M2
     
-    style Cloud fill:#9b59b6,color:#fff
+    style Internet fill:#9b59b6,color:#fff
     style AppCluster fill:#3498db,color:#fff
     style DataCluster fill:#e74c3c,color:#fff
-    style GPUCluster fill:#f1c40f,color:#fff
+    style GPUCluster fill:#f39c12,color:#000
 ```
 
-### 6.3 网络拓扑
+### 6.3 端口规划
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        公网 (HTTPS)                          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     负载均衡 (Nginx/ALB)                     │
-│                     端口: 443 → 8000                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│   API 实例 1    │ │   API 实例 2    │ │   API 实例 3    │
-│   端口: 8000    │ │   端口: 8000    │ │   端口: 8000    │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-              │               │               │
-              └───────────────┼───────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│    Qdrant       │ │   PostgreSQL    │ │   MinerU GPU    │
-│   端口: 6333    │ │   端口: 5432    │ │   端口: 8000    │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-```
+| 服务 | 端口 | 协议 | 说明 |
+|------|------|------|------|
+| FastAPI | 8000 | HTTP | RESTful API 服务 |
+| Gradio | 7860 | HTTP | Web UI 界面 |
+| Qdrant HTTP | 6333 | HTTP | 向量数据库 API |
+| Qdrant gRPC | 6334 | gRPC | 向量数据库内部通信 |
+| PostgreSQL | 5432 | TCP | 会话持久化存储 |
+| MinerU | 8000 | HTTP | GPU 文档解析服务 |
 
 ---
 
@@ -722,91 +739,101 @@ flowchart TB
 
 ### 7.1 水平扩展策略
 
-| 组件 | 扩展方式 | 说明 |
-|------|----------|------|
-| API 服务 | 无状态设计 | 可任意扩展实例数 |
-| Qdrant | 分片集群 | 按集合分片 |
-| PostgreSQL | 读写分离 | 主从复制 |
-| MinerU | 多实例 | 负载均衡分发 |
+| 组件 | 扩展方式 | 无状态？ | 说明 |
+|------|----------|----------|------|
+| FastAPI | 多实例负载均衡 | ✅ | 可任意水平扩展 |
+| Gradio | Session Sticky | ❌ | 需要 Session 保持 |
+| Qdrant | 分片集群 | - | 按集合分片 |
+| PostgreSQL | 读写分离 | - | 主从复制 |
+| MinerU | 多实例 + 负载均衡 | - | GPU 任务分发 |
 
 ### 7.2 扩展点设计
 
 ```python
-# 工具扩展点
-class BaseTool(Protocol):
-    """工具基类协议"""
-    
-    name: str
-    description: str
-    
-    def run(self, input: str) -> str:
-        """执行工具"""
-        ...
+# ===== 工具扩展点 =====
+# 在 utils/tools_config.py 中添加新工具工厂方法
+def get_custom_tools(llm_embedding) -> List[BaseTool]:
+    """自定义工具集合"""
+    pass
 
-# Middleware 扩展点
-class Middleware(Protocol):
-    """中间件协议"""
+# ===== Middleware 扩展点 =====
+# 继承 BaseMiddleware 实现自定义中间件
+class CustomMiddleware(BaseMiddleware):
+    applicable_node_types = {"model"}
     
-    def before_invoke(self, request: Request) -> Request:
-        """请求预处理"""
-        ...
+    def before_model(self, state, node_name) -> Tuple[dict, bool]:
+        return {}, False
     
-    def after_invoke(self, response: Response) -> Response:
-        """响应后处理"""
-        ...
+    def after_model(self, state, response, node_name, elapsed) -> dict:
+        return {}
 
-# LLM 扩展点
-class LLMProvider(Protocol):
-    """LLM 提供商协议"""
-    
-    def get_chat_model(self) -> BaseChatModel:
-        """获取聊天模型"""
-        ...
-    
-    def get_embeddings(self) -> Embeddings:
-        """获取 Embedding"""
-        ...
+# ===== 分析器扩展点 =====
+# 继承 BaseMedicalAnalyzer 添加新的医学分析器
+class CustomAnalyzer(BaseMedicalAnalyzer):
+    def get_analysis_type(self) -> AnalysisType:
+        return AnalysisType.CUSTOM
 ```
 
-### 7.3 性能优化建议
-
-| 优化项 | 建议 | 预期收益 |
-|--------|------|----------|
-| 向量检索 | 调整 `search_kwargs={"k": 5}` | 减少无关文档 |
-| Rerank | 调整 `top_n=3` | 提高相关性 |
-| 并发 | 调整 `max_workers=5` | 提高吞吐量 |
-| 缓存 | 添加向量缓存层 | 减少重复计算 |
-| 连接池 | PostgreSQL 连接池 | 减少连接开销 |
-
----
-
-## 八、安全设计
-
-### 8.1 安全架构
+### 7.3 新增医疗分析器步骤
 
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart LR
-    USER[用户] --> AUTH[认证]
-    AUTH --> RATE[限流]
-    RATE --> PII[PII 检测]
-    PII --> AGENT[Agent]
-    
-    style AUTH fill:#e74c3c,color:#fff
-    style RATE fill:#f1c40f,color:#fff
-    style PII fill:#e67e22,color:#fff
+    A[1. 创建 analyzer_xxx.py] --> B[2. 继承 BaseMedicalAnalyzer]
+    B --> C[3. 实现 analyze() 方法]
+    C --> D[4. 定义参考范围 MedicalReferenceDatabase]
+    D --> E[5. 在 medical_tools.py 注册 @tool]
+    E --> F[6. 在 tools_config.py 添加到 medical_tools]
+    F --> G[7. 更新 prompt_template_medical_agent.txt]
 ```
-
-### 8.2 安全措施
-
-| 层级 | 措施 | 实现 |
-|------|------|------|
-| 网络层 | HTTPS | TLS 1.3 |
-| 应用层 | 认证 | API Key / JWT |
-| 应用层 | 限流 | 令牌桶算法 |
-| 数据层 | PII 检测 | 正则 + NER |
-| 数据层 | 加密 | AES-256 |
 
 ---
 
-**文档版本**: v1.0.0 | **更新日期**: 2026-04-03
+## 附录
+
+### A. 配置项速查表
+
+| 配置项 | 环境变量 | 默认值 | 说明 |
+|--------|----------|--------|------|
+| LLM 类型 | `LLM_TYPE` | `qwen` | LLM 供应商 |
+| 通义千问 Key | `DASHSCOPE_API_KEY` | - | 阿里百炼 API Key |
+| OpenAI Key | `OPENAI_API_KEY` | - | OpenAI API Key |
+| Qdrant URL | `QDRANT_URL` | `http://127.0.0.1:6333` | 向量库地址 |
+| 集合名 | `QDRANT_COLLECTION_NAME` | `knowledge_base_v2` | Qdrant 集合名称 |
+| MinerU 地址 | `MINERU_API_URL` | `http://localhost:8000` | 解析服务地址 |
+| DB 连接串 | `DB_URI` | - | PostgreSQL 连接 |
+| 最大模型调用 | `MW_MAX_MODEL_CALLS` | `10` | 单次对话上限 |
+| PII 模式 | `MW_PII_MODE` | `warn` | detect/warn/mask/block |
+| 并行线程数 | `PARALLEL_TOOL_MAX_WORKERS` | `5` | 工具并行数 |
+| 工具超时 | `PARALLEL_TOOL_TIMEOUT` | `30` | 秒 |
+
+### B. 目录结构速查
+
+```
+L1-Project-2/
+├── 📄 核心入口
+│   ├── main.py              # FastAPI (681行)
+│   ├── ragAgent.py          # LangGraph 编译 (1200+行)
+│   ├── vectorSave.py        # 向量引擎 v2
+│   ├── pipeline.py          # 文档流水线
+│   └── gradio_ui.py         # Web 前端
+│
+├── 📁 utils/
+│   ├── llms.py              # LLM 工厂 (4供应商)
+│   ├── tools_config.py      # 工具工厂 (物理隔离)
+│   ├── retriever.py         # 两阶段检索
+│   ├── middleware.py         # 5 种 Middleware
+│   ├── auth.py              # 3 方式认证
+│   │
+│   ├── config/              # 6 个配置子模块
+│   └── medical_analysis/    # 5 个分析器 + Tool 封装
+│
+├── 📁 prompts/              # 7 个提示词模板
+├── 📁 test/                 # 测试用例
+├── 📁 docker-compose/       # 3 个编排文件
+└── 📋 requirements.txt      # Python 依赖
+```
+
+---
+
+**文档版本**: v2.0.0 | **更新日期**: 2026-04-19 | **维护者**: 开发团队
