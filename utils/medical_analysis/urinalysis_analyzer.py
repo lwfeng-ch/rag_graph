@@ -42,7 +42,6 @@ class UrinalysisAnalysisResult:
     abnormal_count: int = 0
     risk_level: RiskLevel = RiskLevel.LOW
     diagnosis_hints: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
     summary: str = ""
 
 
@@ -347,7 +346,6 @@ class UrinalysisAnalyzer:
             overall_risk = RiskLevel.LOW
         
         diagnosis_hints = self.generate_diagnosis_hints(indicators)
-        recommendations = self.generate_recommendations(indicators)
         
         summary = self._generate_summary(indicators, abnormal_count, overall_risk)
         
@@ -356,7 +354,6 @@ class UrinalysisAnalyzer:
             abnormal_count=abnormal_count,
             risk_level=overall_risk,
             diagnosis_hints=diagnosis_hints,
-            recommendations=recommendations,
             summary=summary
         )
         

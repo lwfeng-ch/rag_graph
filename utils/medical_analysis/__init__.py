@@ -6,15 +6,21 @@
 - 各类检验报告分析器
 - 分诊引擎
 - 医疗工具封装
+- 抽象基类（支持扩展）
 """
 
 from .medical_reference import Gender, RiskLevel, MedicalReferenceDatabase
+from .base_analyzer import (
+    BaseMedicalAnalyzer,
+    BaseAnalysisResult,
+    AnalysisType,
+)
 from .cbc_analyzer import cbc_analyzer, CBCAnalyzer
 from .biochemistry_analyzer import biochemistry_analyzer, BiochemistryAnalyzer
 from .urinalysis_analyzer import urinalysis_analyzer, UrinalysisAnalyzer
 from .vital_signs_analyzer import vital_signs_analyzer, VitalSignsAnalyzer
 from .symptom_analyzer import symptom_analyzer, SymptomAnalyzer
-from .triage_engine import triage_engine, TriageEngine
+
 from .medical_tools import (
     get_medical_tools,
     analyze_cbc_report,
@@ -29,6 +35,10 @@ __all__ = [
     "Gender",
     "RiskLevel",
     "MedicalReferenceDatabase",
+    # 抽象基类
+    "BaseMedicalAnalyzer",
+    "BaseAnalysisResult",
+    "AnalysisType",
     # 分析器
     "cbc_analyzer",
     "CBCAnalyzer",
@@ -40,9 +50,7 @@ __all__ = [
     "VitalSignsAnalyzer",
     "symptom_analyzer",
     "SymptomAnalyzer",
-    # 分诊引擎
-    "triage_engine",
-    "TriageEngine",
+
     # 医疗工具
     "get_medical_tools",
     "analyze_cbc_report",

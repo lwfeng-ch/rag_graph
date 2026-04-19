@@ -13,8 +13,6 @@ from langchain_core.documents.compressor import BaseDocumentCompressor
 
 from utils.config import Config
 
-# 设置日志模版
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -34,10 +32,10 @@ MODEL_CONFIGS = {
         "embedding_model": "text-embedding-v1"
     },
     "oneapi": {
-        "base_url": "http://139.224.72.218:3000/v1",
-        "api_key": Config.QWEN_API_KEY,
+        "base_url": Config.ONEAPI_API_BASE,
+        "api_key": Config.ONEAPI_API_KEY or Config.QWEN_API_KEY,
         "chat_model": "qwen-max",
-        "embedding_model": "text-embedding-v1"
+        "embedding_model": Config.ONEAPI_EMBEDDING_MODEL
     },
     "ollama": {
         "base_url": Config.OLLAMA_API_BASE,

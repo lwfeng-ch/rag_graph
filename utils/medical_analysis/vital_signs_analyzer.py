@@ -2,9 +2,15 @@
 生命体征整合分析模块
 
 功能：
-- 接收体温、血压、心率等生命体征数据
+- 接收体温、血压、心率等生命体征数据（4 项核心指标）
 - 建立生命体征与检验指标的关联分析
 - 生成综合健康评估
+
+支持指标：
+- temperature: 体温（℃）
+- heart_rate: 心率（次/分）
+- systolic_bp: 收缩压（mmHg）
+- diastolic_bp: 舒张压（mmHg）
 """
 
 import logging
@@ -40,7 +46,6 @@ class VitalSignsAnalysisResult:
     abnormal_count: int = 0
     risk_level: RiskLevel = RiskLevel.LOW
     diagnosis_hints: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
     summary: str = ""
 
 
@@ -98,23 +103,22 @@ class VitalSignsAnalyzer:
         temperature: Optional[float] = None,
         heart_rate: Optional[float] = None,
         systolic_bp: Optional[float] = None,
-        diastolic_bp: Optional[float] = None,
-        respiratory_rate: Optional[float] = None,
-        spo2: Optional[float] = None
+        diastolic_bp: Optional[float] = None
     ) -> VitalSignsAnalysisResult:
         """
-        综合分析生命体征。
+        综合分析生命体征（4 项核心指标）。
         
         Args:
             temperature: 体温（℃）
             heart_rate: 心率（次/分）
             systolic_bp: 收缩压（mmHg）
             diastolic_bp: 舒张压（mmHg）
-            respiratory_rate: 呼吸频率（次/分）
-            spo2: 血氧饱和度（%）
         
         Returns:
             VitalSignsAnalysisResult: 分析结果
+        
+        Raises:
+            无：所有异常均已内部处理
         """
         logger.info("开始分析生命体征")
         
@@ -132,12 +136,6 @@ class VitalSignsAnalyzer:
         if diastolic_bp is not None:
             indicators.append(self.analyze_indicator("DBP", diastolic_bp))
         
-        if respiratory_rate is not None:
-            indicators.append(self.analyze_indicator("RR", respiratory_rate))
-        
-        if spo2 is not None:
-            indicators.append(self.analyze_indicator("SPO2", spo2))
-        
         abnormal_count = sum(1 for i in indicators if i.status != "正常")
         
         risk_levels = [i.risk_level for i in indicators]
@@ -151,7 +149,6 @@ class VitalSignsAnalyzer:
             overall_risk = RiskLevel.LOW
         
         diagnosis_hints = self.generate_diagnosis_hints(indicators)
-        recommendations = self.generate_recommendations(indicators)
         
         summary = self._generate_summary(indicators, abnormal_count, overall_risk)
         
@@ -160,7 +157,6 @@ class VitalSignsAnalyzer:
             abnormal_count=abnormal_count,
             risk_level=overall_risk,
             diagnosis_hints=diagnosis_hints,
-            recommendations=recommendations,
             summary=summary
         )
         
@@ -172,13 +168,16 @@ class VitalSignsAnalyzer:
         indicators: List[VitalSignIndicator]
     ) -> List[str]:
         """
-        基于异常指标生成诊断提示。
+        基于异常指标生成诊断提示（4 项核心指标）。
         
         Args:
             indicators: 指标列表
         
         Returns:
             List[str]: 诊断提示列表
+        
+        Raises:
+            无：所有异常均已内部处理
         """
         hints = []
         
@@ -186,7 +185,6 @@ class VitalSignsAnalyzer:
         hr = next((i for i in indicators if i.name_en == "Heart Rate"), None)
         sbp = next((i for i in indicators if i.name_en == "Systolic Blood Pressure"), None)
         dbp = next((i for i in indicators if i.name_en == "Diastolic Blood Pressure"), None)
-        spo2 = next((i for i in indicators if i.name_en == "Blood Oxygen Saturation"), None)
         
         if temp and temp.status != "正常":
             if temp.value > 37.3:
@@ -197,9 +195,9 @@ class VitalSignsAnalyzer:
         
         if hr and hr.status != "正常":
             if hr.value > 100:
-                hints.append("心动过速（>100次/分）→ 提示发热、贫血、甲亢或心功能不全")
+                hints.append("心动过速（>100 次/分）→ 提示发热、贫血、甲亢或心功能不全")
             else:
-                hints.append("心动过缓（<60次/分）→ 提示甲减、运动员状态或心脏传导阻滞")
+                hints.append("心动过缓（<60 次/分）→ 提示甲减、运动员状态或心脏传导阻滞")
         
         if sbp and dbp:
             if sbp.status != "正常" or dbp.status != "正常":
@@ -207,12 +205,6 @@ class VitalSignsAnalyzer:
                     hints.append("高血压（≥140/90 mmHg）→ 提示心血管风险，建议心内科就诊")
                 elif sbp.value < 90 or dbp.value < 60:
                     hints.append("低血压（<90/60 mmHg）→ 提示休克、脱水或心功能不全")
-        
-        if spo2 and spo2.status != "正常":
-            if spo2.value < 90:
-                hints.append("低血氧（<90%）→ 提示呼吸衰竭，建议立即就医")
-            elif spo2.value < 95:
-                hints.append("血氧偏低（<95%）→ 提示呼吸功能异常，建议监测")
         
         return hints
     

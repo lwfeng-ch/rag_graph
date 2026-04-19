@@ -146,7 +146,7 @@ class UrinalysisReportInput(BaseModel):
 
 
 class VitalSignsInput(BaseModel):
-    """生命体征分析输入参数"""
+    """生命体征分析输入参数（4 项核心指标）"""
     temperature: Optional[float] = Field(
         default=None,
         description="体温（摄氏度），正常范围 36.0-37.3"
@@ -162,14 +162,6 @@ class VitalSignsInput(BaseModel):
     diastolic_bp: Optional[float] = Field(
         default=None,
         description="舒张压（mmHg），正常范围 60-90"
-    )
-    respiratory_rate: Optional[float] = Field(
-        default=None,
-        description="呼吸频率（次/分），正常范围 12-20"
-    )
-    spo2: Optional[float] = Field(
-        default=None,
-        description="血氧饱和度（%），正常范围 95-100"
     )
 
 
@@ -259,17 +251,24 @@ def analyze_vital_signs(
     temperature: Optional[float] = None,
     heart_rate: Optional[float] = None,
     systolic_bp: Optional[float] = None,
-    diastolic_bp: Optional[float] = None,
-    respiratory_rate: Optional[float] = None,
-    spo2: Optional[float] = None
+    diastolic_bp: Optional[float] = None
 ) -> str:
     """
-    分析生命体征数据，评估发热、高血压、低血氧等风险。
+    分析生命体征数据（4 项核心指标），评估发热、高血压等风险。
     
     适用场景：用户提供了体温、血压等生命体征数据，需要评估各项指标是否正常。
     
+    Args:
+        temperature: 体温（℃）
+        heart_rate: 心率（次/分）
+        systolic_bp: 收缩压（mmHg）
+        diastolic_bp: 舒张压（mmHg）
+    
     Returns:
         JSON 格式结果，包含：异常指标、诊断提示、风险等级
+    
+    Raises:
+        无：所有异常均已内部处理
     """
     logger.info("开始分析生命体征")
     
@@ -278,13 +277,11 @@ def analyze_vital_signs(
             temperature=temperature,
             heart_rate=heart_rate,
             systolic_bp=systolic_bp,
-            diastolic_bp=diastolic_bp,
-            respiratory_rate=respiratory_rate,
-            spo2=spo2
+            diastolic_bp=diastolic_bp
         )
         return _result_to_json(result, "vital_signs")
     except Exception as e:
-        logger.error(f"生命体征分析失败: {e}")
+        logger.error(f"生命体征分析失败：{e}")
         return json.dumps({
             "success": False,
             "error": str(e),

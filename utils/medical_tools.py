@@ -21,9 +21,6 @@ from utils.medical_analysis import (
     VitalSignsAnalyzer,
     symptom_analyzer,
     SymptomAnalyzer,
-    # 分诊引擎
-    triage_engine,
-    TriageEngine,
     # 医疗工具
     get_medical_tools,
     analyze_cbc_report,
@@ -47,8 +44,6 @@ __all__ = [
     "VitalSignsAnalyzer",
     "symptom_analyzer",
     "SymptomAnalyzer",
-    "triage_engine",
-    "TriageEngine",
     "get_medical_tools",
     "analyze_cbc_report",
     "analyze_biochemistry_report",

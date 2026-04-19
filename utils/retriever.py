@@ -14,10 +14,11 @@
 
 import os
 import logging
-from typing import List
+from typing import List, Union
 
 from langchain_qdrant import QdrantVectorStore, RetrievalMode, FastEmbedSparse
 from langchain_core.tools.retriever import create_retriever_tool
+from langchain_core.tools import BaseTool
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.documents.compressor import BaseDocumentCompressor
@@ -96,7 +97,7 @@ class RerankRetriever(BaseRetriever):
         return result
 
 
-def create_hybrid_retriever(llm_embedding, llm_type: str = "qwen"):
+def create_hybrid_retriever(llm_embedding, llm_type: str = "qwen") -> BaseRetriever:
     """
     创建混合检索器（两阶段检索：粗排 + 精排）。
 
@@ -105,7 +106,7 @@ def create_hybrid_retriever(llm_embedding, llm_type: str = "qwen"):
         llm_type: LLM 供应商类型，传递给 get_reranker()（默认 "qwen"）
 
     Returns:
-        RerankRetriever: 两阶段检索器实例
+        BaseRetriever: 两阶段检索器实例
 
     Raises:
         RuntimeError: 如果 Qdrant 初始化失败
@@ -121,6 +122,8 @@ def create_hybrid_retriever(llm_embedding, llm_type: str = "qwen"):
             "sparse_embedding": sparse_embeddings,
             "collection_name": Config.QDRANT_COLLECTION_NAME,
             "retrieval_mode": RetrievalMode.HYBRID,
+            "vector_name": "text-dense",
+            "sparse_vector_name": "text-sparse",
         }
 
         # 动态处理 Qdrant 的三种部署环境
@@ -160,7 +163,7 @@ def create_hybrid_retriever(llm_embedding, llm_type: str = "qwen"):
     return final_retriever
 
 
-def create_retriever_tool_from_retriever(retriever):
+def create_retriever_tool_from_retriever(retriever: BaseRetriever) -> BaseTool:
     """
     从检索器创建检索工具。
 

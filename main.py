@@ -1,391 +1,681 @@
 # main.py
+"""
+FastAPI API 服务入口 — 适配 ragAgent_copy.py 双路由架构（General RAG + Medical Agent）。
+
+适配变更：
+- 使用 get_rag_tools / get_medical_agent_tools + ToolConfig(rag_tools=, medical_tools=)
+- 消费 final_payload（安全警告、免责声明、分诊建议）
+- 流式/非流式均兼容 general 和 medical 两条业务线路
+"""
 import os
 import re
 import json
 from contextlib import asynccontextmanager
 from typing import List, Tuple
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Query, Form, Header
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import logging
-from concurrent_log_handler import ConcurrentRotatingFileHandler
-import sys
 import time
 import uuid
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from ragAgent import (
     ToolConfig,
     create_graph,
-    save_graph_visualization,
-    get_llm,
-    get_tools,
-    Config,
-    Context,
+    extract_graph_response,
+    RagAgentError,
+    ResponseExtractionError,
 )
+from utils.config import Config
+from utils.logger import setup_logger
+from utils.llms import get_llm
+from utils.tools_config import get_rag_tools, get_medical_agent_tools_with_user_docs
+from utils.auth import get_current_user_id, AuthConfig
+from utils.user_medical_store import get_user_medical_store
+from utils.document_processor import get_document_processor
 
-# 设置日志基本配置，级别为DEBUG或INFO
-logger = logging.getLogger(__name__)
-# 设置日志器级别为DEBUG
-logger.setLevel(logging.DEBUG)
-# logger.setLevel(logging.INFO)
-logger.handlers = []  # 清空默认处理器
-# 使用ConcurrentRotatingFileHandler
-handler = ConcurrentRotatingFileHandler(
-    # 日志文件
-    Config.LOG_FILE,
-    # 日志文件最大允许大小为5MB，达到上限后触发轮转
-    maxBytes = Config.MAX_BYTES,
-    # 在轮转时，最多保留3个历史日志文件
-    backupCount = Config.BACKUP_COUNT
-)
-# 设置处理器级别为DEBUG
-handler.setLevel(logging.DEBUG)
-handler.setFormatter(logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-))
-logger.addHandler(handler)
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+
+logger = setup_logger(__name__)
 
 
-# 定义消息类，用于封装API接口返回数据
-# 定义Message类
+#   消息模型
 class Message(BaseModel):
     role: str
     content: str
 
-# 定义ChatCompletionRequest类
+#   聊天请求模型
 class ChatCompletionRequest(BaseModel):
     messages: List[Message]
     stream: Optional[bool] = False
     userId: Optional[str] = None
     conversationId: Optional[str] = None
 
-# 定义ChatCompletionResponseChoice类
+
+#   聊天响应模型
 class ChatCompletionResponseChoice(BaseModel):
     index: int
     message: Message
     finish_reason: Optional[str] = None
 
-# 定义ChatCompletionResponse类
+
+#   分诊数据模型
+class TriageData(BaseModel):
+    recommended_departments: List[str] = []
+    urgency_level: str = "routine"
+    triage_reason: str = ""
+    triage_confidence: float = 0.8
+
+#   结构化医疗数据模型
+class StructuredMedicalData(BaseModel):
+    triage: TriageData
+    analysis: Optional[Dict[str, Any]] = None
+
+
+#   医疗扩展模型
+class MedicalExtension(BaseModel):
+    risk_level: str = "low"
+    risk_warning: str = ""
+    disclaimer: str = ""
+    structured_data: Optional[StructuredMedicalData] = None
+
+
+#   聊天完成响应模型
 class ChatCompletionResponse(BaseModel):
     id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex}")
     object: str = "chat.completion"
     created: int = Field(default_factory=lambda: int(time.time()))
     choices: List[ChatCompletionResponseChoice]
     system_fingerprint: Optional[str] = None
+    medical: Optional[MedicalExtension] = None
 
-# 定义格式化响应函数，用于将模型生成的原始响应格式化为更易读的文本格式
-def format_response(response):
-    """对输入的文本进行段落分隔、添加适当的换行符，以及在代码块中增加标记，以便生成更具可读性的输出。
-
-    Args:
-        response: 输入的文本。
-
-    Returns:
-        具有清晰段落分隔的文本。
-    """
-    # 使用正则表达式 \n{2, }将输入的response按照两个或更多的连续换行符进行分割。这样可以将文本分割成多个段落，每个段落由连续的非空行组成
+#   文本格式化模型
+def format_response(response: str) -> str:
+    """对输入的文本进行段落分隔、添加适当的换行符。"""
     paragraphs = re.split(r'\n{2,}', response)
-    # 空列表，用于存储格式化后的段落
     formatted_paragraphs = []
-    # 遍历每个段落进行处理
     for para in paragraphs:
-        # 检查段落中是否包含代码块标记
         if '```' in para:
-            # 将段落按照```分割成多个部分，代码块和普通文本交替出现
             parts = para.split('```')
             for i, part in enumerate(parts):
-                # 检查当前部分的索引是否为奇数，奇数部分代表代码块
-                if i % 2 == 1:  # 这是代码块
-                    # 将代码块部分用换行符和```包围，并去除多余的空白字符
+                if i % 2 == 1:
                     parts[i] = f"\n```\n{part.strip()}\n```\n"
-            # 将分割后的部分重新组合成一个字符串
             para = ''.join(parts)
         else:
-            # 否则，将句子中的句点后面的空格替换为换行符，以便句子之间有明确的分隔
             para = para.replace('. ', '.\n')
-        # 将格式化后的段落添加到formatted_paragraphs列表
-        # strip()方法用于移除字符串开头和结尾的空白字符（包括空格、制表符 \t、换行符 \n等）
         formatted_paragraphs.append(para.strip())
-    # 将所有格式化后的段落用两个换行符连接起来，以形成一个具有清晰段落分隔的文本
     return '\n\n'.join(formatted_paragraphs)
 
-# 采用异步方式解决模型加载问题，确保在FastAPI应用启动时加载模型，关闭时清理资源
+
+# 全局变量
+graph = None
+tool_config: Optional[ToolConfig] = None
+llm_embedding = None  # 全局 embedding model
+
+
+# Lifespan — 启动/关闭管理
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """管理 FastAPI 应用生命周期的异步上下文管理器，负责启动和关闭时的初始化与清理。
-
-    LangChain v1 变更说明：
-    - get_llm / get_tools / create_graph 接口保持不变
-    - 向量数据库在底层已从 ChromaDB 迁移到 Qdrant，此处无需修改
-
-    Args:
-        app (FastAPI): FastAPI 应用实例。
-
-    Yields:
-        None: 在 yield 前完成初始化，yield 后执行清理。
-    """
-    global graph, tool_config, middleware_manager
+    """服务启动时初始化图谱，关闭时清理资源。"""
+    global graph, tool_config, llm_embedding
     try:
         llm_chat, llm_embedding = get_llm(Config.LLM_TYPE)
-        tools = get_tools(llm_embedding)
-        tool_config = ToolConfig(tools)
+
+        rag_tools = get_rag_tools(llm_embedding)
+        medical_tools = get_medical_agent_tools_with_user_docs(
+            llm_embedding=llm_embedding,
+            llm_type=Config.LLM_TYPE,
+            include_user_docs=True
+        )
+        tool_config = ToolConfig(rag_tools=rag_tools, medical_tools=medical_tools)
 
         graph = create_graph(llm_chat, llm_embedding, tool_config)
-        save_graph_visualization(graph)
-        
-    # 处理 ValueError 异常，记录错误日志
-    except ValueError as ve:
-        logger.error(f"Value error in response processing: {ve}")
-    # 处理其他异常，记录错误日志
-    except Exception as e:
-        logger.error(f"Error processing response: {e}")
-        
-    yield
-    logger.info("The service has been shut down")
+        logger.info("服务初始化完成，图谱已就绪")
+        logger.info("医疗 Agent 已启用用户医疗文档检索功能")
 
-# 创建 FastAPI 实例, lifespan参数用于在应用程序生命周期的开始和结束时执行一些初始化或清理工作
+    except Exception as e:
+        logger.error(f"服务初始化失败: {e}", exc_info=True)
+        raise
+
+    yield
+    logger.info("服务已关闭")
+
+
 app = FastAPI(lifespan=lifespan)
 
 
+# ============================================================
+# CORS 中间件配置
+# ============================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite 开发服务器
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",  # Vite 自动递增端口
+        "http://127.0.0.1:5174",
+        "http://localhost:7860",  # Gradio WebUI
+        "http://127.0.0.1:7860",
+        "http://localhost:7861",
+        "http://127.0.0.1:7861",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
+)
+
+
+# ============================================================
+# 健康检查
+# ============================================================
 @app.get("/health")
 async def health_check():
-    """健康检查端点
-    
-    Returns:
-        dict: 包含服务状态的字典
-    """
     return {"status": "healthy", "service": "智能分诊系统后端服务"}
 
-# 该函数用于处理用户输入的非流式请求，生成完整的响应内容，包括工具调用和格式化输出。
-# 它接受用户输入的内容、图对象、工具配置对象和配置参数作为参数，返回一个包含格式化响应的 JSON 响应对象。
-async def handle_non_stream_response(user_input, graph, tool_config, config):
+
+# ============================================================
+# final_payload 感知的事件处理器（核心修复 P0 #1）
+# ============================================================
+def _build_medical_extension(final_payload: dict) -> Optional[MedicalExtension]:
     """
-    处理非流式响应的异步函数，生成并返回完整的响应内容。
+    从 final_payload 构建 MedicalExtension 对象（HTTP API 层专用）。
 
     Args:
-        user_input (str): 用户输入的内容。
-        graph: 图对象，用于处理消息流。
-        tool_config: 工具配置对象，包含可用工具的名称和定义。
-        config (dict): 配置参数，包含线程和用户标识。
+        final_payload: medical_safety_guard 节点生成的结构化载荷
 
     Returns:
-        JSONResponse: 包含格式化响应的 JSON 响应对象。
+        Optional[MedicalExtension]: 医疗扩展信息，非 medical 路由时返回 None
     """
-    # 初始化 content 变量，用于存储最终响应内容
-    content = None
-    try:
-        # 启动 graph.stream 处理用户输入，生成事件流
-        events = graph.stream({"messages": [{"role": "user", "content": user_input}], "rewrite_count": 0}, config)
-        # 遍历事件流中的每个事件
-        for event in events:
-            # 遍历事件中的所有值
-            for value in event.values():
-                # 检查事件值是否包含有效消息列表
-                if "messages" not in value or not isinstance(value["messages"], list):
-                    # 记录警告日志，跳过无效消息
-                    logger.warning("No valid messages in response")
-                    continue
+    if not final_payload or final_payload.get("route") != "medical":
+        return None
 
-                # 获取消息列表中的最后一条消息
-                last_message = value["messages"][-1]
+    medical_ext = MedicalExtension(
+        risk_level=final_payload.get("risk_level", "low"),
+        risk_warning=final_payload.get("risk_warning", ""),
+        disclaimer=final_payload.get("disclaimer", ""),
+        structured_data=None,
+    )
 
-                # 检查消息是否包含工具调用
-                if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-                    # 遍历所有工具调用
-                    for tool_call in last_message.tool_calls:
-                        # 验证工具调用是否为字典且包含名称
-                        if isinstance(tool_call, dict) and "name" in tool_call:
-                            # 记录工具调用日志
-                            logger.info(f"Calling tool: {tool_call['name']}")
-                    # 跳过本次循环，继续处理下一事件
-                    continue
-
-                # 检查消息是否包含内容
-                if hasattr(last_message, "content"):
-                    # 将消息内容赋值给 content
-                    content = last_message.content
-
-                    # 检查是否为工具输出（基于工具名称）
-                    if hasattr(last_message, "name") and last_message.name in tool_config.get_tool_names():
-                        # 获取工具名称
-                        tool_name = last_message.name
-                        # 记录工具输出日志
-                        logger.info(f"Tool Output [{tool_name}]: {content}")
-                    # 处理大模型输出（非工具消息）
-                    else:
-                        # 记录最终响应日志
-                        logger.info(f"Final Response is: {content}")
-                else:
-                    # 记录无内容的消息日志，跳过处理
-                    logger.info("Message has no content, skipping")
-    except ValueError as ve:
-        # 捕获并记录值错误
-        logger.error(f"Value error in response processing: {ve}")
-    except Exception as e:
-        # 捕获并记录其他未预期的异常
-        logger.error(f"Error processing response: {e}")
-
-    # 格式化响应内容，若无内容则返回默认值
-    formatted_response = str(format_response(content)) if content else "No response generated"
-    # 记录格式化后的响应日志
-    logger.info(f"Results for Formatting: {formatted_response}")
-
-    # 构造返回给客户端的响应对象
-    try:
-        response = ChatCompletionResponse(
-            choices=[
-                ChatCompletionResponseChoice(
-                    index=0,
-                    message=Message(role="assistant", content=formatted_response),
-                    finish_reason="stop"
-                )
-            ]
-        )
-    except Exception as resp_error:
-        # 捕获并记录构造响应对象时的异常
-        logger.error(f"Error creating response object: {resp_error}")
-        # 构造错误响应对象
-        response = ChatCompletionResponse(
-            choices=[
-                ChatCompletionResponseChoice(
-                    index=0,
-                    message=Message(role="assistant", content="Error generating response"),
-                    finish_reason="error"
-                )
-            ]
-        )
-
-    # 记录发送给客户端的响应内容日志
-    logger.info(f"Send response content: \n{response}")
-    # 返回 JSON 格式的响应对象
-    return JSONResponse(content=response.model_dump())
-
-# 该函数用于处理用户输入的流式请求，生成流式响应数据。
-# 它接受用户输入的内容、图对象和配置参数作为参数，返回一个流式响应对象。
-async def handle_stream_response(user_input, graph, config):
-    """
-    处理流式响应的异步函数，生成并返回流式数据。
-
-    Args:
-        user_input (str): 用户输入的内容。
-        graph: 图对象，用于处理消息流。
-        config (dict): 配置参数，包含线程和用户标识。
-
-    Returns:
-        StreamingResponse: 流式响应对象，媒体类型为 text/event-stream。
-    """
-    async def generate_stream():
-        """
-        内部异步生成器函数，用于产生流式响应数据。
-
-        Yields:
-            str: 流式数据块，格式为 SSE (Server-Sent Events)。
-
-        Raises:
-            Exception: 流生成过程中可能抛出的异常。
-        """
+    raw_structured = final_payload.get("structured_data", {})
+    if raw_structured:
         try:
-            # 生成唯一的 chunk ID
-            chunk_id = f"chatcmpl-{uuid.uuid4().hex}"
-            # 调用 graph.stream 获取消息流
+            triage_raw = raw_structured.get("triage", {})
+            triage_obj = TriageData(
+                recommended_departments=triage_raw.get("recommended_departments", []),
+                urgency_level=triage_raw.get("urgency_level", "routine"),
+                triage_reason=triage_raw.get("triage_reason", ""),
+                triage_confidence=triage_raw.get("triage_confidence", 0.8),
+            )
+            medical_ext.structured_data = StructuredMedicalData(
+                triage=triage_obj,
+                analysis=raw_structured.get("analysis"),
+            )
+        except Exception as e:
+            logger.warning(f"解析 final_payload.structured_data 失败: {e}")
+            medical_ext.structured_data = None
+
+    return medical_ext
+
+
+def _extract_response_from_events(events) -> Tuple[str, Optional[MedicalExtension]]:
+    """
+    遍历 graph.stream 事件，提取响应文本和医疗扩展信息。
+
+    内部委托给 ragAgent.extract_graph_response() 进行核心事件解析，
+    本函数仅负责 HTTP API 层的 MedicalExtension 构建逻辑。
+
+    Returns:
+        (content_text, medical_extension_or_none)
+
+    Raises:
+        ResponseExtractionError: 响应提取失败时抛出
+    """
+    content_text, final_payload = extract_graph_response(events)
+    medical_ext = _build_medical_extension(final_payload)
+    return content_text, medical_ext
+
+
+# ============================================================
+# 非流式响应
+# ============================================================
+async def handle_non_stream_response(user_input: str, graph, config: dict):
+    try:
+        events = graph.stream(
+            {"messages": [{"role": "user", "content": user_input}], "rewrite_count": 0},
+            config,
+        )
+
+        content_text, medical_ext = _extract_response_from_events(events)
+
+        formatted_text = format_response(content_text)
+        logger.info(f"Final Response: {formatted_text[:300]}")
+
+        choices = [
+            ChatCompletionResponseChoice(
+                index=0,
+                message=Message(role="assistant", content=formatted_text),
+                finish_reason="stop"
+            )
+        ]
+
+        return ChatCompletionResponse(choices=choices, medical=medical_ext).model_dump()
+
+    except ResponseExtractionError as ree:
+        logger.error(f"非流式响应提取失败: {ree.to_dict()}")
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "响应提取失败", "code": ree.code, "message": ree.message}
+        )
+    except RagAgentError as rae:
+        logger.error(f"RagAgent 异常 [{rae.code}]: {rae.message}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Agent 处理异常", "code": rae.code, "message": rae.message}
+        )
+
+
+# ============================================================
+# 流式响应
+# ============================================================
+async def handle_stream_response(user_input: str, graph, config: dict):
+    async def generate_stream():
+        chunk_id = f"chatcmpl-{uuid.uuid4().hex}"
+
+        try:
             stream_data = graph.stream(
                 {"messages": [{"role": "user", "content": user_input}], "rewrite_count": 0},
                 config,
-                stream_mode="messages"
+                stream_mode=["messages", "values"],
             )
-            # 遍历消息流中的每个数据块
-            for message_chunk, metadata in stream_data:
-                try:
-                    # 获取当前节点名称
-                    node_name = metadata.get("langgraph_node") if metadata else None
-                    # 仅处理 generate 和 agent 节点
-                    if node_name in ["generate", "agent"]:
-                        # 获取消息内容，默认空字符串
-                        chunk = getattr(message_chunk, 'content', '')
-                        # 记录流式数据块日志
-                        logger.info(f"Streaming chunk from {node_name}: {chunk}")
-                        # 产出流式数据块
-                        yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'choices': [{'index': 0, 'delta': {'content': chunk}, 'finish_reason': None}]})}\n\n"
-                except Exception as chunk_error:
-                    # 记录单个数据块处理异常
-                    logger.error(f"Error processing stream chunk: {chunk_error}")
-                    continue
-
-            # 产出流结束标记
+        except Exception as e:
+            logger.error(f"流式请求启动失败: {e}", exc_info=True)
+            error_chunk = {
+                'id': chunk_id,
+                'object': 'chat.completion.chunk',
+                'created': int(time.time()),
+                'choices': [{'index': 0, 'delta': {'content': f'[ERROR] 流式请求启动失败: {str(e)}'}, 'finish_reason': None}]
+            }
+            yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
-        except Exception as stream_error:
-            # 记录流生成过程中的异常
-            logger.error(f"Stream generation error: {stream_error}")
-            # 产出错误提示
-            yield f"data: {json.dumps({'error': 'Stream processing failed'})}\n\n"
+            return
 
-    # 返回流式响应对象
+        medical_nodes = {"medical_agent", "medical_analysis", "department_triage", "medical_safety_guard", "generate"}
+        general_nodes = {"agent", "generate"}
+        all_valid_nodes = medical_nodes | general_nodes
+        final_payload_collected: Optional[Dict] = None
+        error_count = 0
+        MAX_STREAM_ERRORS = 10
+
+        for event in stream_data:
+            try:
+                if isinstance(event, tuple) and len(event) == 2:
+                    event_type, event_data = event
+
+                    if event_type == "messages":
+                        message_chunk, metadata = event_data
+                        node_name = metadata.get("langgraph_node") if metadata else None
+                        chunk = getattr(message_chunk, 'content', '')
+
+                        if node_name in all_valid_nodes and chunk:
+                            logger.debug(f"Stream [{node_name}]: {chunk[:120]}")
+                            data = {
+                                'id': chunk_id,
+                                'object': 'chat.completion.chunk',
+                                'created': int(time.time()),
+                                'choices': [{'index': 0, 'delta': {'content': chunk}, 'finish_reason': None}]
+                            }
+                            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+                    elif event_type == "values":
+                        if isinstance(event_data, dict) and "final_payload" in event_data:
+                            final_payload_collected = event_data["final_payload"]
+                            if final_payload_collected:
+                                route = final_payload_collected.get('route', 'unknown')
+                                logger.info(f"流式模式检测到 final_payload，route={route}")
+
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Stream chunk error ({error_count}/{MAX_STREAM_ERRORS}): {e}")
+                if error_count >= MAX_STREAM_ERRORS:
+                    logger.error(f"流式错误超过阈值 {MAX_STREAM_ERRORS}，终止流")
+                    break
+                continue
+
+        if final_payload_collected and final_payload_collected.get("route") == "medical":
+            medical_ext = _build_medical_extension(final_payload_collected)
+            if medical_ext:
+                medical_event = {
+                    'id': chunk_id,
+                    'object': 'chat.completion.chunk',
+                    'created': int(time.time()),
+                    'choices': [{'index': 0, 'delta': {'medical': medical_ext.model_dump()}, 'finish_reason': None}]
+                }
+                yield f"data: {json.dumps(medical_event, ensure_ascii=False)}\n\n"
+                logger.info("流式模式已发送医疗扩展信息")
+
+        yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
+
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
-# 它确保在处理请求时，graph 和 tool_config 已经被初始化，避免了在处理请求时的初始化问题。
-# 它还确保了在处理请求时，graph 和 tool_config 是最新的，避免了在处理请求时的更新问题。
-async def get_dependencies() -> Tuple[any, any]:
-    """
-    依赖注入函数，用于获取 graph 和 tool_config。
 
-    Returns:
-        Tuple: 包含 (graph, tool_config) 的元组。
-
-    Raises:
-        HTTPException: 如果 graph 或 tool_config 未初始化，则抛出 500 错误。
-    """
-    if not graph or not tool_config:
-        raise HTTPException(status_code=500, detail="Service not initialized")
+# ============================================================
+# 依赖注入
+# ============================================================
+async def get_dependencies() -> Tuple[Any, Any]:
+    if not graph:
+        raise HTTPException(status_code=503, detail="图谱未初始化，服务不可用")
+    if not tool_config:
+        raise HTTPException(status_code=503, detail="工具配置未初始化")
+    if not hasattr(graph, 'invoke'):
+        raise HTTPException(status_code=500, detail="图谱实例异常（缺少 invoke 方法）")
     return graph, tool_config
 
+
+# ============================================================
+# 路由
+# ============================================================
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest, dependencies: Tuple[any, any] = Depends(get_dependencies)):
-    """接收来自前端的请求数据进行业务的处理。
-
-    Args:
-        request: 请求参数。
-
-    Returns:
-        标准的Python字典。
+async def chat_completions(
+    request: ChatCompletionRequest,
+    dependencies: Tuple[Any, Any] = Depends(get_dependencies),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    聊天完成端点
+    
+    认证方式：
+    1. API Key（Header: X-API-Key）- 服务间调用
+    2. JWT Token（Header: Authorization）- 前端用户
+    3. 开发模式（请求体 userId）- 仅开发环境
+    
+    安全约束：
+    - user_id 必须从认证体系获取，不能从请求体直接读取
+    - 防止用户伪造 user_id 查询其他用户数据
     """
     try:
-        graph, tool_config = dependencies
-        # 检查request是否有效
+        g, tc = dependencies
         if not request.messages or not request.messages[-1].content:
-            logger.error("Invalid request: Empty or invalid messages")
             raise HTTPException(status_code=400, detail="Messages cannot be empty or invalid")
-        user_input = request.messages[-1].content
-        logger.info(f"The user's user_input is: {user_input}")
 
-        # 定义运行时配置，包含线程ID和用户ID，使用默认值防止未定义
-        user_id = request.userId if request.userId else "unknown"
-        conversation_id = request.conversationId if request.conversationId else "default"
+        user_input = request.messages[-1].content
+        logger.info(f"User input: {user_input}")
+
+        # 安全获取 user_id（从认证体系）
+        user_id = get_current_user_id(
+            x_api_key=x_api_key,
+            authorization=authorization,
+            request_user_id=request.userId
+        )
         
-        # LangChain v1 变更说明：
-        # config["configurable"] 模式仍然完全兼容
-        # 同时 user_id 也可通过 context 参数传递（v1 推荐方式）
+        conversation_id = request.conversationId or "default"
+
         config = {
             "configurable": {
                 "thread_id": f"{user_id}@@{conversation_id}",
                 "user_id": user_id,
-                "conversation_id": conversation_id
+                "conversation_id": conversation_id,
             }
         }
 
-        # 调用流式输出
         if request.stream:
-            return await handle_stream_response(user_input, graph, config)
-        # 调用非流式输出
-        return await handle_non_stream_response(user_input, graph, tool_config, config)
+            return await handle_stream_response(user_input, g, config)
+        return await handle_non_stream_response(user_input, g, config)
 
+    except HTTPException:
+        raise
+    except ResponseExtractionError as ree:
+        logger.error(f"聊天完成响应提取失败: {ree.to_dict()}")
+        raise HTTPException(status_code=502, detail={"error": "响应提取失败", "code": ree.code, "message": ree.message})
+    except RagAgentError as rae:
+        logger.error(f"聊天完成 RagAgent 异常 [{rae.code}]: {rae.message}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Agent 处理异常", "code": rae.code, "message": rae.message, "details": rae.details}
+        )
     except Exception as e:
-        logger.error(f"Error handling chat completion:\n\n {str(e)}")
+        logger.error(f"Error handling chat completion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================
+# 文档管理 API
+# ============================================================
+
+class DocumentUploadResponse(BaseModel):
+    """文档上传响应"""
+    success: bool
+    file_md5: Optional[str] = None
+    filename: Optional[str] = None
+    doc_type: Optional[str] = None
+    chunks_count: Optional[int] = None
+    upload_time: Optional[str] = None
+    error: Optional[str] = None
+
+
+class DocumentInfo(BaseModel):
+    """文档信息"""
+    doc_id: str
+    filename: str
+    doc_type: str
+    upload_time: str
+    file_md5: str
+    content_preview: str
+
+
+class DocumentListResponse(BaseModel):
+    """文档列表响应"""
+    user_id: str
+    total: int
+    documents: List[DocumentInfo]
+
+
+class DocumentDeleteResponse(BaseModel):
+    """文档删除响应"""
+    success: bool
+    file_md5: str
+    deleted_chunks: int
+    error: Optional[str] = None
+
+
+class DocumentStatsResponse(BaseModel):
+    """文档统计响应"""
+    user_id: str
+    total_documents: int
+    total_chunks: int
+    doc_types: Dict[str, int]
+
+
+@app.post("/v1/documents/upload", response_model=DocumentUploadResponse)
+async def upload_document(
+    file: UploadFile = File(...),
+    doc_type: str = Form("other"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    上传文档
+    
+    支持的文件类型：
+    - PDF (.pdf)
+    - Word (.docx)
+    - 文本文件 (.txt)
+    
+    文档类型（doc_type）：
+    - health_report: 体检报告
+    - medical_record: 病历
+    - lab_report: 检验报告
+    - prescription: 处方
+    - other: 其他
+    
+    认证方式：
+    1. API Key（Header: X-API-Key）
+    2. JWT Token（Header: Authorization）
+    3. 开发模式（请求体 userId）
+    """
+    try:
+        # 安全获取 user_id
+        user_id = get_current_user_id(
+            x_api_key=x_api_key,
+            authorization=authorization
+        )
+        
+        # 读取文件内容
+        file_content = await file.read()
+        filename = file.filename or "unknown"
+        
+        # 获取 embedding model
+        if not llm_embedding:
+            raise HTTPException(status_code=503, detail="服务未初始化")
+        
+        # 获取文档处理器
+        processor = get_document_processor(embedding_model=llm_embedding)
+        
+        # 处理并存储文档
+        result = processor.process_and_store(
+            user_id=user_id,
+            file_content=file_content,
+            filename=filename,
+            doc_type=doc_type
+        )
+        
+        return DocumentUploadResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"文档上传失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文档上传失败: {str(e)}")
+
+
+@app.get("/v1/documents", response_model=DocumentListResponse)
+async def list_documents(
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    获取文档列表
+    
+    认证方式：
+    1. API Key（Header: X-API-Key）
+    2. JWT Token（Header: Authorization）
+    """
+    try:
+        # 安全获取 user_id
+        user_id = get_current_user_id(
+            x_api_key=x_api_key,
+            authorization=authorization
+        )
+        
+        # 获取文档列表
+        store = get_user_medical_store()
+        documents = store.list_documents(user_id, limit=limit, offset=offset)
+        
+        # 转换为响应格式
+        doc_infos = [
+            DocumentInfo(**doc) for doc in documents
+        ]
+        
+        return DocumentListResponse(
+            user_id=user_id,
+            total=len(doc_infos),
+            documents=doc_infos
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取文档列表失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")
+
+
+@app.delete("/v1/documents/{file_md5}", response_model=DocumentDeleteResponse)
+async def delete_document(
+    file_md5: str,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    删除文档
+    
+    认证方式：
+    1. API Key（Header: X-API-Key）
+    2. JWT Token（Header: Authorization）
+    """
+    try:
+        # 安全获取 user_id
+        user_id = get_current_user_id(
+            x_api_key=x_api_key,
+            authorization=authorization
+        )
+        
+        # 删除文档
+        store = get_user_medical_store()
+        deleted_chunks = store.delete_file(user_id, file_md5)
+        
+        if deleted_chunks == -1:
+            return DocumentDeleteResponse(
+                success=False,
+                file_md5=file_md5,
+                deleted_chunks=0,
+                error="删除失败"
+            )
+        
+        return DocumentDeleteResponse(
+            success=True,
+            file_md5=file_md5,
+            deleted_chunks=deleted_chunks
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除文档失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"删除文档失败: {str(e)}")
+
+
+@app.get("/v1/documents/stats", response_model=DocumentStatsResponse)
+async def get_document_stats(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    获取文档统计信息
+    
+    认证方式：
+    1. API Key（Header: X-API-Key）
+    2. JWT Token（Header: Authorization）
+    """
+    try:
+        # 安全获取 user_id
+        user_id = get_current_user_id(
+            x_api_key=x_api_key,
+            authorization=authorization
+        )
+        
+        # 获取统计信息
+        store = get_user_medical_store()
+        stats = store.get_collection_stats(user_id)
+        
+        return DocumentStatsResponse(
+            user_id=user_id,
+            total_documents=stats.get("total_documents", 0),
+            total_chunks=stats.get("total_chunks", 0),
+            doc_types=stats.get("doc_types", {})
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取文档统计失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取文档统计失败: {str(e)}")
+
+
 if __name__ == "__main__":
-    logger.info(f"Start the server on port {Config.PORT}")
-    # uvicorn是一个用于运行ASGI应用的轻量级、超快速的ASGI服务器实现
-    # 用于部署基于FastAPI框架的异步PythonWeb应用程序
+    logger.info(f"Starting server on {Config.HOST}:{Config.PORT}")
     uvicorn.run(app, host=Config.HOST, port=Config.PORT)
