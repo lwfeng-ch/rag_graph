@@ -17,6 +17,7 @@
 - 所有非敏感配置项通过此类定义默认值，无需 .env 文件即可运行
 - 敏感信息（API Key 等）可通过 .env 文件覆盖，优先级：.env > 代码默认值
 """
+
 import os
 import logging
 from dotenv import load_dotenv
@@ -25,13 +26,13 @@ from dotenv import load_dotenv
 # .env 文件是可选的，不提供时所有配置使用下方代码中的默认值
 load_dotenv()
 
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
 
 
 class Config:
     """
     统一的配置类，集中管理所有常量。
-    
+
     所有配置项优先从环境变量（.env）读取，未设置时使用下方代码中的默认值。
     """
 
@@ -41,12 +42,17 @@ class Config:
     LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
     LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "ragAgent-Prod")
-    LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+    LANGCHAIN_ENDPOINT = os.getenv(
+        "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
+    )
 
     # ============================================================
     # MinerU 远程服务配置
     # ============================================================
-    MINERU_API_URL = os.getenv("MINERU_API_URL", "https://600d97fdc573450290c6285c14a1837e--8000.ap-shanghai2.cloudstudio.club")
+    MINERU_API_URL = os.getenv(
+        "MINERU_API_URL",
+        "https://600d97fdc573450290c6285c14a1837e--8000.ap-shanghai2.cloudstudio.club",
+    )
     MINERU_TIMEOUT = int(os.getenv("MINERU_TIMEOUT", "300"))
     MINERU_PARSE_METHOD = os.getenv("MINERU_PARSE_METHOD", "auto")
 
@@ -109,7 +115,16 @@ class Config:
     # ============================================================
     INPUT_DIR = "input"
     OUTPUT_DIR = "output"
-    SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".html", ".htm", ".xlsx", ".doc", ".ppt"}
+    SUPPORTED_EXTENSIONS = {
+        ".pdf",
+        ".docx",
+        ".pptx",
+        ".html",
+        ".htm",
+        ".xlsx",
+        ".doc",
+        ".ppt",
+    }
 
     # ============================================================
     # 日志配置
@@ -122,7 +137,9 @@ class Config:
     # ============================================================
     # 数据库配置
     # ============================================================
-    DB_URI = os.getenv("DB_URI", "postgresql://user:password@localhost:5432/database?sslmode=disable")
+    DB_URI = os.getenv(
+        "DB_URI", "postgresql://user:password@localhost:5432/database?sslmode=disable"
+    )
 
     # ============================================================
     # API 服务配置
@@ -236,5 +253,5 @@ class Config:
 
 logging.basicConfig(
     level=Config.LOG_LEVEL,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )

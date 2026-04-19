@@ -8,6 +8,7 @@
 - 管理 MinerU 远程服务配置
 - 管理 Prompt 文件路径
 """
+
 import os
 
 
@@ -44,7 +45,7 @@ class ServiceConfig:
 
     MINERU_API_URL: str = os.getenv(
         "MINERU_API_URL",
-        "https://600d97fdc573450290c6285c14a1837e--8000.ap-shanghai2.cloudstudio.club"
+        "https://600d97fdc573450290c6285c14a1837e--8000.ap-shanghai2.cloudstudio.club",
     )
     MINERU_TIMEOUT: int = int(os.getenv("MINERU_TIMEOUT", "300"))
     MINERU_PARSE_METHOD: str = os.getenv("MINERU_PARSE_METHOD", "auto")
@@ -56,15 +57,18 @@ class ServiceConfig:
 
     PROMPT_TEMPLATE_TXT_INTENT_ROUTER: str = "prompts/prompt_template_intent_router.txt"
     PROMPT_TEMPLATE_TXT_MEDICAL_AGENT: str = "prompts/prompt_template_medical_agent.txt"
-    PROMPT_TEMPLATE_TXT_MEDICAL_AGENT_CB: str = "prompts/prompt_template_medical_agent_cb.txt"
-    PROMPT_TEMPLATE_TXT_MEDICAL_ANALYSIS: str = "prompts/prompt_template_medical_analysis.txt"
+    PROMPT_TEMPLATE_TXT_MEDICAL_AGENT_CB: str = (
+        "prompts/prompt_template_medical_agent_cb.txt"
+    )
+    PROMPT_TEMPLATE_TXT_MEDICAL_ANALYSIS: str = (
+        "prompts/prompt_template_medical_analysis.txt"
+    )
 
     PROMPT_CACHE_MAX_SIZE: int = int(os.getenv("PROMPT_CACHE_MAX_SIZE", "100"))
     PROMPT_CACHE_TTL: int = int(os.getenv("PROMPT_CACHE_TTL", "300"))
 
     DB_URI: str = os.getenv(
-        "DB_URI",
-        "postgresql://lwfeng:123456@localhost:5433/postgres?sslmode=disable"
+        "DB_URI", "postgresql://lwfeng:123456@localhost:5433/postgres?sslmode=disable"
     )
 
     # 并行工具执行配置

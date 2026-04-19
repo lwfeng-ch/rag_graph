@@ -5,12 +5,14 @@ Markdown 两阶段语义切分器
 阶段B: 超长段落使用 RecursiveCharacterTextSplitter 进行软切分
 每个 Chunk 自带标题层级元数据，用于提升检索精度
 """
+
 import re
 import logging
 from typing import List, Dict, Any, Optional
 
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     _HAS_LANGCHAIN_SPLITTER = True
 except ImportError:
     _HAS_LANGCHAIN_SPLITTER = False
@@ -29,7 +31,7 @@ class MarkdownSplitter:
         chunk_size: int = None,
         chunk_overlap: int = None,
         separators: List[str] = None,
-        max_chunk_length: int = None
+        max_chunk_length: int = None,
     ):
         """
         初始化 Markdown 切分器。
@@ -49,8 +51,7 @@ class MarkdownSplitter:
 
         header_patterns = [re.escape(h[0]) for h in self.headers]
         self._header_regex = re.compile(
-            r"^( " + "|".join(header_patterns) + r") .+$",
-            re.MULTILINE
+            r"^( " + "|".join(header_patterns) + r") .+$", re.MULTILINE
         )
 
         if _HAS_LANGCHAIN_SPLITTER:
@@ -87,24 +88,22 @@ class MarkdownSplitter:
             content = section["content"].strip()
             if not content:
                 continue
-            
+
             metadata = section.get("metadata", {})
             if len(content) <= self.chunk_size:
-                chunks.append({
-                    "content": content,
-                    "metadata": dict(metadata)
-                })
+                chunks.append({"content": content, "metadata": dict(metadata)})
             else:
                 sub_chunks = self._split_long_content(content)
                 for sub in sub_chunks:
                     combined_meta = dict(metadata)
                     combined_meta.update(sub.get("metadata", {}))
-                    chunks.append({
-                        "content": sub["content"],
-                        "metadata": combined_meta
-                    })
+                    chunks.append(
+                        {"content": sub["content"], "metadata": combined_meta}
+                    )
 
-        logger.info(f"两阶段切分完成: 原文 → {len(sections)} 个段落 → {len(chunks)} 个 chunks")
+        logger.info(
+            f"两阶段切分完成: 原文 → {len(sections)} 个段落 → {len(chunks)} 个 chunks"
+        )
         return chunks
 
     def _split_by_headers(self, text: str) -> List[Dict[str, Any]]:
@@ -127,10 +126,12 @@ class MarkdownSplitter:
 
             if header_match:
                 if current_section["content"].strip():
-                    sections.append({
-                        "content": current_section["content"],
-                        "metadata": dict(current_section["metadata"])
-                    })
+                    sections.append(
+                        {
+                            "content": current_section["content"],
+                            "metadata": dict(current_section["metadata"]),
+                        }
+                    )
 
                 level, header_text = header_match
                 level_key = f"h{level}"
@@ -140,19 +141,21 @@ class MarkdownSplitter:
                     k_num = int(k[1:])
                     if k_num > level:
                         del header_stack[k]
-                        
+
                 current_section = {
                     "content": line + "\n",
-                    "metadata": dict(header_stack)
+                    "metadata": dict(header_stack),
                 }
             else:
                 current_section["content"] += line + "\n"
 
         if current_section["content"].strip():
-            sections.append({
-                "content": current_section["content"],
-                "metadata": dict(current_section["metadata"])
-            })
+            sections.append(
+                {
+                    "content": current_section["content"],
+                    "metadata": dict(current_section["metadata"]),
+                }
+            )
 
         if not sections:
             sections.append({"content": text, "metadata": {}})
@@ -163,7 +166,7 @@ class MarkdownSplitter:
         """判断是否为标题行，返回 (级别, 标题文本) 或 None"""
         for i, (pattern, key) in enumerate(self.headers):
             if line.startswith(pattern + " ") or line.startswith(pattern + "\t"):
-                header_text = line[len(pattern):].strip()
+                header_text = line[len(pattern) :].strip()
                 if header_text:
                     return (i + 1, header_text)
         return None
@@ -242,14 +245,14 @@ class MarkdownSplitter:
                 continue
             if sep in text:
                 segments = text.split(sep)
-                
+
                 for seg in segments:
                     seg = seg.strip()
                     if not seg:
                         continue
-                    
+
                     if len(current_chunk) + len(seg) < self.chunk_size:
-                        current_chunk += (sep + seg if current_chunk else seg)
+                        current_chunk += sep + seg if current_chunk else seg
                     else:
                         if current_chunk:
                             chunks.append(current_chunk)
@@ -282,7 +285,9 @@ class MarkdownSplitter:
                 chunk["filename"] = filename
                 all_chunks.append(chunk)
 
-        logger.info(f"批量切分完成: {len(documents)} 个文档 → {len(all_chunks)} 个 chunks")
+        logger.info(
+            f"批量切分完成: {len(documents)} 个文档 → {len(all_chunks)} 个 chunks"
+        )
         return all_chunks
 
     def build_context_string(self, chunk: Dict[str, Any]) -> str:
@@ -305,7 +310,7 @@ class MarkdownSplitter:
                 prefix_level = int(key[1:])
                 prefix = "#" * prefix_level
                 context_parts.append(f"{prefix} {metadata[key]}")
-        
+
         if context_parts:
             return "\n".join(context_parts) + "\n\n" + content
         return content
@@ -315,8 +320,7 @@ if __name__ == "__main__":
     import logging
 
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 
     SAMPLE_MD = """# 第一章 患者基本信息

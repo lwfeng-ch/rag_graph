@@ -22,27 +22,27 @@ MODEL_CONFIGS = {
         "base_url": Config.OPENAI_API_BASE,
         "api_key": Config.OPENAI_API_KEY,
         "chat_model": "gpt-4o",
-        "embedding_model": "text-embedding-3-small"
+        "embedding_model": "text-embedding-3-small",
     },
     "qwen": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "api_key": Config.QWEN_API_KEY,
         "chat_model": "qwen-plus",
         "rerank_model": "qwen3-rerank",
-        "embedding_model": "text-embedding-v1"
+        "embedding_model": "text-embedding-v1",
     },
     "oneapi": {
         "base_url": Config.ONEAPI_API_BASE,
         "api_key": Config.ONEAPI_API_KEY or Config.QWEN_API_KEY,
         "chat_model": "qwen-max",
-        "embedding_model": Config.ONEAPI_EMBEDDING_MODEL
+        "embedding_model": Config.ONEAPI_EMBEDDING_MODEL,
     },
     "ollama": {
         "base_url": Config.OLLAMA_API_BASE,
         "api_key": "ollama",
         "chat_model": "qwen2.5:32b",
-        "embedding_model": "bge-m3:latest"
-    }
+        "embedding_model": "bge-m3:latest",
+    },
 }
 
 
@@ -59,6 +59,7 @@ class DashScopeReranker(BaseDocumentCompressor):
     基于阿里百炼 DashScope 封装的文档重排压缩器。
     该类实现了 LangChain 的 BaseDocumentCompressor 接口。
     """
+
     model: str = Field(default="qwen3-rerank")
     api_key: str = Field(default="")
     top_n: int = Field(default=3)
@@ -76,7 +77,7 @@ class DashScopeReranker(BaseDocumentCompressor):
 
         if not self.api_key:
             logger.error("Reranker 缺少 API_KEY，跳过重排。")
-            return documents[:self.top_n]
+            return documents[: self.top_n]
 
         # 动态设置百炼全局密钥
         dashscope.api_key = self.api_key
@@ -87,7 +88,9 @@ class DashScopeReranker(BaseDocumentCompressor):
         docs_texts = [doc.page_content for doc in documents]
 
         try:
-            logger.info(f"调用 Rerank 模型 [{self.model}], 待重排文档数: {len(docs_texts)}")
+            logger.info(
+                f"调用 Rerank 模型 [{self.model}], 待重排文档数: {len(docs_texts)}"
+            )
 
             resp = dashscope.TextReRank.call(
                 model=self.model,
@@ -95,7 +98,7 @@ class DashScopeReranker(BaseDocumentCompressor):
                 documents=docs_texts,
                 top_n=self.top_n,
                 return_documents=True,
-                instruct=self.instruct
+                instruct=self.instruct,
             )
 
             if resp.status_code == HTTPStatus.OK:
@@ -104,26 +107,29 @@ class DashScopeReranker(BaseDocumentCompressor):
                     # 【修复点】直接获取 item.index，并强制转换类型确保安全
                     original_index = int(item.index)
                     relevance_score = float(item.relevance_score)
-                    
+
                     doc = documents[original_index]
-                    doc.metadata["rerank_score"] = relevance_score 
+                    doc.metadata["rerank_score"] = relevance_score
                     reranked_docs.append(doc)
                 return reranked_docs
             else:
                 logger.error(f"Rerank 失败: code={resp.code}, msg={resp.message}")
-                return documents[:self.top_n]
+                return documents[: self.top_n]
 
         except Exception as e:
             logger.error(f"调用 Rerank 发生异常: {e}")
-            return documents[:self.top_n]
+            return documents[: self.top_n]
 
 
 class LLMInitializationError(Exception):
     """自定义异常类用于LLM初始化错误"""
+
     pass
 
 
-def initialize_llm(llm_type: str = DEFAULT_LLM_TYPE) -> tuple[ChatOpenAI, OpenAIEmbeddings]:
+def initialize_llm(
+    llm_type: str = DEFAULT_LLM_TYPE,
+) -> tuple[ChatOpenAI, OpenAIEmbeddings]:
     """
     初始化LLM实例
 
@@ -138,7 +144,9 @@ def initialize_llm(llm_type: str = DEFAULT_LLM_TYPE) -> tuple[ChatOpenAI, OpenAI
     """
     try:
         if llm_type not in MODEL_CONFIGS:
-            raise ValueError(f"不支持的LLM类型: {llm_type}. 可用的类型: {list(MODEL_CONFIGS.keys())}")
+            raise ValueError(
+                f"不支持的LLM类型: {llm_type}. 可用的类型: {list(MODEL_CONFIGS.keys())}"
+            )
 
         config = MODEL_CONFIGS[llm_type]
 
@@ -151,7 +159,7 @@ def initialize_llm(llm_type: str = DEFAULT_LLM_TYPE) -> tuple[ChatOpenAI, OpenAI
             model=config["chat_model"],
             temperature=DEFAULT_TEMPERATURE,
             timeout=30,
-            max_retries=2
+            max_retries=2,
         )
 
         llm_embedding = OpenAIEmbeddings(
@@ -159,7 +167,7 @@ def initialize_llm(llm_type: str = DEFAULT_LLM_TYPE) -> tuple[ChatOpenAI, OpenAI
             api_key=config["api_key"],
             model=config["embedding_model"],
             deployment=config["embedding_model"],
-            check_embedding_ctx_length=False
+            check_embedding_ctx_length=False,
         )
 
         logger.info(f"成功初始化 {llm_type} LLM")
@@ -186,7 +194,9 @@ def get_llm(llm_type: str = DEFAULT_LLM_TYPE) -> tuple[ChatOpenAI, OpenAIEmbeddi
         raise
 
 
-def get_reranker(llm_type: str = DEFAULT_LLM_TYPE, top_n: int = 3) -> BaseDocumentCompressor:
+def get_reranker(
+    llm_type: str = DEFAULT_LLM_TYPE, top_n: int = 3
+) -> BaseDocumentCompressor:
     """
     获取重排器实例的封装函数。
     由 tools_config.py 在组装检索器时直接调用，做到完全解耦。
@@ -197,13 +207,11 @@ def get_reranker(llm_type: str = DEFAULT_LLM_TYPE, top_n: int = 3) -> BaseDocume
         api_key = config.get("rerank_api_key", Config.QWEN_API_KEY)
 
         if not api_key:
-            logger.warning(f"缺少重排 API Key ({llm_type})，请检查 DASHSCOPE_API_KEY 环境变量")
+            logger.warning(
+                f"缺少重排 API Key ({llm_type})，请检查 DASHSCOPE_API_KEY 环境变量"
+            )
 
-        reranker = DashScopeReranker(
-            model=model_name,
-            api_key=api_key,
-            top_n=top_n
-        )
+        reranker = DashScopeReranker(model=model_name, api_key=api_key, top_n=top_n)
         logger.info(f"成功初始化 {llm_type} 的 Reranker: {model_name} (top_n={top_n})")
         return reranker
 
@@ -216,7 +224,9 @@ def get_reranker(llm_type: str = DEFAULT_LLM_TYPE, top_n: int = 3) -> BaseDocume
 if __name__ == "__main__":
     # 提醒：如果是本地直接运行此文件测试，请确保环境变量已配置
     if not Config.QWEN_API_KEY:
-        logger.warning("未检测到 DASHSCOPE_API_KEY 环境变量，接下来的 API 调用测试可能会失败！")
+        logger.warning(
+            "未检测到 DASHSCOPE_API_KEY 环境变量，接下来的 API 调用测试可能会失败！"
+        )
 
     test_llm_type = "qwen"
     logger.info(f"========== 开始测试 [{test_llm_type}] 模型链路 ==========")
@@ -248,18 +258,24 @@ if __name__ == "__main__":
         # 构造混合了医学和非医学领域的测试文档
         test_docs = [
             Document(page_content="苹果公司的最新款手机即将发布。"),
-            Document(page_content="高血压患者应注意低盐饮食，多吃新鲜蔬菜和水果，并定期监测血压。"),
-            Document(page_content="量子力学是物理学的一个重要分支，研究微观粒子的运动规律。"),
-            Document(page_content="长期熬夜和不规律的作息会导致心血管疾病发病率上升。")
+            Document(
+                page_content="高血压患者应注意低盐饮食，多吃新鲜蔬菜和水果，并定期监测血压。"
+            ),
+            Document(
+                page_content="量子力学是物理学的一个重要分支，研究微观粒子的运动规律。"
+            ),
+            Document(page_content="长期熬夜和不规律的作息会导致心血管疾病发病率上升。"),
         ]
         test_query = "有什么预防高血压的饮食建议？"
 
         logger.info(f">>> 测试 Rerank 排序能力 (Query: '{test_query}')...")
-        reranked_docs = reranker.compress_documents(documents=test_docs, query=test_query)
+        reranked_docs = reranker.compress_documents(
+            documents=test_docs, query=test_query
+        )
 
         logger.info(f"[Rerank 响应]: 重排完成，截取 Top {len(reranked_docs)} 文档：")
         for i, doc in enumerate(reranked_docs):
-            score = doc.metadata.get('rerank_score', '无分数')
+            score = doc.metadata.get("rerank_score", "无分数")
             logger.info(f"   Top {i+1} [相关性得分: {score}]: {doc.page_content}")
 
         logger.info("========== 所有模型链路测试通过！==========")
@@ -268,5 +284,3 @@ if __name__ == "__main__":
         logger.error(f"模型配置或初始化失败，程序终止: {str(e)}")
     except Exception as e:
         logger.error(f"API 请求过程中发生异常（请检查网络或余额）: {str(e)}")
-        
- 

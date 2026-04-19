@@ -8,6 +8,7 @@
 - 提供文件路径配置
 - 组合所有子配置（兼容层）
 """
+
 import os
 import logging
 from typing import Dict, List, Tuple, Any
@@ -22,7 +23,7 @@ from utils.config.logging_config import LoggingConfig
 
 load_dotenv()
 
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
 
 
 class LangSmithConfig:
@@ -36,10 +37,14 @@ class LangSmithConfig:
         LANGCHAIN_ENDPOINT: LangSmith 端点 URL
     """
 
-    LANGCHAIN_TRACING_V2: bool = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+    LANGCHAIN_TRACING_V2: bool = (
+        os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+    )
     LANGCHAIN_API_KEY: str = os.getenv("LANGCHAIN_API_KEY", "")
     LANGCHAIN_PROJECT: str = os.getenv("LANGCHAIN_PROJECT", "ragAgent-Prod")
-    LANGCHAIN_ENDPOINT: str = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+    LANGCHAIN_ENDPOINT: str = os.getenv(
+        "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
+    )
 
     @classmethod
     def validate(cls) -> Dict[str, Any]:
@@ -97,7 +102,16 @@ class FilePathConfig:
 
     INPUT_DIR: str = "input"
     OUTPUT_DIR: str = "output"
-    SUPPORTED_EXTENSIONS: set = {".pdf", ".docx", ".pptx", ".html", ".htm", ".xlsx", ".doc", ".ppt"}
+    SUPPORTED_EXTENSIONS: set = {
+        ".pdf",
+        ".docx",
+        ".pptx",
+        ".html",
+        ".htm",
+        ".xlsx",
+        ".doc",
+        ".ppt",
+    }
 
 
 class Config(
@@ -108,7 +122,7 @@ class Config(
     ServiceConfig,
     LoggingConfig,
     MarkdownConfig,
-    FilePathConfig
+    FilePathConfig,
 ):
     """
     统一配置类（兼容层）。

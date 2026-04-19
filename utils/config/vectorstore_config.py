@@ -7,6 +7,7 @@
 - 管理 Chroma 数据库配置（兼容旧代码）
 - 支持环境变量覆盖
 """
+
 import os
 from typing import Optional
 
@@ -26,7 +27,9 @@ class VectorStoreConfig:
 
     QDRANT_URL: str = os.getenv("QDRANT_URL", "http://127.0.0.1:6333")
     QDRANT_API_KEY: Optional[str] = os.getenv("QDRANT_API_KEY", None)
-    QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "knowledge_base_v2")
+    QDRANT_COLLECTION_NAME: str = os.getenv(
+        "QDRANT_COLLECTION_NAME", "knowledge_base_v2"
+    )
     QDRANT_LOCAL_PATH: str = os.getenv("QDRANT_LOCAL_PATH", "qdrantDB")
 
     CHROMADB_DIRECTORY: str = "chromaDB"

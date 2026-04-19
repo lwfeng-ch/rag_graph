@@ -17,6 +17,7 @@
         doc_type="health_report"
     )
 """
+
 import os
 import hashlib
 import logging
@@ -38,6 +39,7 @@ class DocumentProcessorConfig:
         chunk_size: 文本分块大小
         chunk_overlap: 分块重叠大小
     """
+
     supported_types: Dict[str, str] = None
     max_file_size: int = 50 * 1024 * 1024  # 50MB
     chunk_size: int = 500
@@ -64,7 +66,9 @@ class DocumentProcessor:
     - 向量化存储
     """
 
-    def __init__(self, embedding_model, config: Optional[DocumentProcessorConfig] = None):
+    def __init__(
+        self, embedding_model, config: Optional[DocumentProcessorConfig] = None
+    ):
         """
         初始化文档处理器。
 
@@ -88,6 +92,7 @@ class DocumentProcessor:
         if self._mineru_client is None:
             try:
                 from mineru_client import MinerUClient
+
                 self._mineru_client = MinerUClient()
                 logger.info("MinerU 客户端初始化成功")
             except Exception as e:
@@ -106,7 +111,7 @@ class DocumentProcessor:
             try:
                 from langchain_qdrant import QdrantVectorStore
                 from utils.config import Config
-                
+
                 self._vector_store = QdrantVectorStore.from_existing_collection(
                     embedding=self.embedding_model,
                     collection_name=Config.QDRANT_COLLECTION_NAME,
@@ -153,7 +158,10 @@ class DocumentProcessor:
         ext = ext.lower()
 
         if ext not in self.config.supported_types:
-            return False, f"不支持的文件类型: {ext}，支持的类型: {list(self.config.supported_types.keys())}"
+            return (
+                False,
+                f"不支持的文件类型: {ext}，支持的类型: {list(self.config.supported_types.keys())}",
+            )
 
         if len(content) > self.config.max_file_size:
             max_mb = self.config.max_file_size / (1024 * 1024)
@@ -282,7 +290,7 @@ class DocumentProcessor:
                 }
 
             vector_store = self._get_vector_store()
-            
+
             metadatas = [
                 {
                     "user_id": user_id,
@@ -297,7 +305,9 @@ class DocumentProcessor:
 
             vector_store.add_texts(texts=chunks, metadatas=metadatas)
 
-            logger.info(f"文档处理成功: {filename}, MD5: {file_md5}, 分块数: {len(chunks)}")
+            logger.info(
+                f"文档处理成功: {filename}, MD5: {file_md5}, 分块数: {len(chunks)}"
+            )
 
             return {
                 "success": True,
@@ -340,7 +350,9 @@ def get_document_processor(embedding_model=None) -> DocumentProcessor:
 
     if _document_processor is None:
         if embedding_model is None:
-            raise ValueError("首次调用 get_document_processor 必须提供 embedding_model 参数")
+            raise ValueError(
+                "首次调用 get_document_processor 必须提供 embedding_model 参数"
+            )
         _document_processor = DocumentProcessor(embedding_model=embedding_model)
 
     return _document_processor

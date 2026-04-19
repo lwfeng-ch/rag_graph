@@ -6,6 +6,7 @@
 - 管理中间件相关配置
 - 支持环境变量覆盖
 """
+
 import os
 
 
@@ -25,6 +26,8 @@ class MiddlewareConfig:
     MW_MAX_MODEL_CALLS: int = int(os.getenv("MW_MAX_MODEL_CALLS", "10"))
     MW_PII_MODE: str = os.getenv("MW_PII_MODE", "warn")
     MW_SUMMARIZATION_THRESHOLD: int = int(os.getenv("MW_SUMMARIZATION_THRESHOLD", "20"))
-    MW_SUMMARIZATION_KEEP_RECENT: int = int(os.getenv("MW_SUMMARIZATION_KEEP_RECENT", "5"))
+    MW_SUMMARIZATION_KEEP_RECENT: int = int(
+        os.getenv("MW_SUMMARIZATION_KEEP_RECENT", "5")
+    )
     MW_TOOL_MAX_RETRIES: int = int(os.getenv("MW_TOOL_MAX_RETRIES", "2"))
     MW_TOOL_BACKOFF_FACTOR: float = float(os.getenv("MW_TOOL_BACKOFF_FACTOR", "0.5"))

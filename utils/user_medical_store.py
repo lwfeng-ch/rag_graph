@@ -12,6 +12,7 @@
     documents = store.list_documents(user_id="user123", limit=10, offset=0)
     stats = store.get_stats(user_id="user123")
 """
+
 import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ class UserMedicalStoreConfig:
         collection_name: Qdrant 集合名称（独立于系统知识库）
         content_preview_length: 内容预览长度
     """
+
     collection_name: str = "user_medical_documents"
     content_preview_length: int = 200
 
@@ -63,7 +65,7 @@ class UserMedicalStore:
             try:
                 from qdrant_client import QdrantClient
                 from utils.config import Config
-                
+
                 if Config.QDRANT_URL == ":memory:":
                     self._qdrant_client = QdrantClient(location=":memory:")
                 elif Config.QDRANT_URL:
@@ -73,7 +75,7 @@ class UserMedicalStore:
                     )
                 else:
                     self._qdrant_client = QdrantClient(path=Config.QDRANT_LOCAL_PATH)
-                
+
                 logger.info("Qdrant 客户端初始化成功")
             except Exception as e:
                 logger.error(f"Qdrant 客户端初始化失败: {e}")
@@ -110,9 +112,9 @@ class UserMedicalStore:
         """
         try:
             client = self._get_qdrant_client()
-            
+
             from qdrant_client.http import models as qdrant_models
-            
+
             result = client.scroll(
                 collection_name=self.config.collection_name,
                 scroll_filter=qdrant_models.Filter(
@@ -127,14 +129,14 @@ class UserMedicalStore:
                 with_payload=True,
                 with_vectors=False,
             )
-            
+
             points = result[0]
-            
+
             unique_docs = {}
             for point in points:
                 payload = point.payload or {}
                 file_md5 = payload.get("file_md5")
-                
+
                 if file_md5 and file_md5 not in unique_docs:
                     unique_docs[file_md5] = {
                         "doc_id": str(point.id),
@@ -142,13 +144,15 @@ class UserMedicalStore:
                         "doc_type": payload.get("doc_type", "other"),
                         "upload_time": payload.get("upload_time", ""),
                         "file_md5": file_md5,
-                        "content_preview": (payload.get("text", "") or "")[:self.config.content_preview_length],
+                        "content_preview": (payload.get("text", "") or "")[
+                            : self.config.content_preview_length
+                        ],
                     }
-            
+
             documents = list(unique_docs.values())
             documents.sort(key=lambda x: x.get("upload_time", ""), reverse=True)
-            
-            return documents[offset:offset + limit]
+
+            return documents[offset : offset + limit]
 
         except Exception as e:
             logger.error(f"获取文档列表失败: {e}", exc_info=True)
@@ -174,9 +178,9 @@ class UserMedicalStore:
         """
         try:
             client = self._get_qdrant_client()
-            
+
             from qdrant_client.http import models as qdrant_models
-            
+
             search_result = client.scroll(
                 collection_name=self.config.collection_name,
                 scroll_filter=qdrant_models.Filter(
@@ -195,26 +199,28 @@ class UserMedicalStore:
                 with_payload=False,
                 with_vectors=False,
             )
-            
+
             points = search_result[0]
             point_ids = [point.id for point in points]
-            
+
             if not point_ids:
                 return {
                     "success": False,
                     "deleted_chunks": 0,
                     "error": "未找到匹配的文档",
                 }
-            
+
             client.delete(
                 collection_name=self.config.collection_name,
                 points_selector=qdrant_models.PointIdsList(
                     points=point_ids,
                 ),
             )
-            
-            logger.info(f"删除文档成功: user_id={user_id}, file_md5={file_md5}, chunks={len(point_ids)}")
-            
+
+            logger.info(
+                f"删除文档成功: user_id={user_id}, file_md5={file_md5}, chunks={len(point_ids)}"
+            )
+
             return {
                 "success": True,
                 "deleted_chunks": len(point_ids),
@@ -248,9 +254,9 @@ class UserMedicalStore:
         """
         try:
             client = self._get_qdrant_client()
-            
+
             from qdrant_client.http import models as qdrant_models
-            
+
             result = client.scroll(
                 collection_name=self.config.collection_name,
                 scroll_filter=qdrant_models.Filter(
@@ -265,22 +271,22 @@ class UserMedicalStore:
                 with_payload=True,
                 with_vectors=False,
             )
-            
+
             points = result[0]
-            
+
             unique_files = set()
             doc_types = {}
-            
+
             for point in points:
                 payload = point.payload or {}
                 file_md5 = payload.get("file_md5")
                 doc_type = payload.get("doc_type", "other")
-                
+
                 if file_md5:
                     unique_files.add(file_md5)
-                
+
                 doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
-            
+
             return {
                 "user_id": user_id,
                 "total_documents": len(unique_files),

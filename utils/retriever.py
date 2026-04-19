@@ -152,7 +152,7 @@ def create_hybrid_retriever(llm_embedding, llm_type: str = "qwen") -> BaseRetrie
 
     # 4. 构建精排引擎：调用 llms.py 的工厂方法获取 DashScope 重排器，截取 Top 3
     compressor = get_reranker(llm_type=llm_type, top_n=3)
-    
+
     # 5. 构建两阶段检索器：粗排 → 精排
     final_retriever = RerankRetriever(
         base_retriever=base_retriever,
@@ -184,6 +184,6 @@ def create_retriever_tool_from_retriever(retriever: BaseRetriever) -> BaseTool:
             "输入：医学术语、关键词或短语。"
         ),
     )
-    
+
     logger.info("检索工具创建成功")
     return retriever_tool

@@ -98,48 +98,46 @@ def _result_to_json(result: Any, analysis_type: str) -> str:
     """
     try:
         result_dict = _convert_value(result)
-        
-        output = {
-            "success": True,
-            "analysis_type": analysis_type,
-            **result_dict
-        }
-        
+
+        output = {"success": True, "analysis_type": analysis_type, **result_dict}
+
         return json.dumps(output, ensure_ascii=False, indent=2)
-        
+
     except Exception as e:
         logger.error(f"转换结果为 JSON 失败: {e}")
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "analysis_type": analysis_type
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": str(e), "analysis_type": analysis_type},
+            ensure_ascii=False,
+        )
 
 
 class CBCReportInput(BaseModel):
     """血常规报告分析输入参数"""
+
     report_text: str = Field(
         description="血常规检查报告文本，包含白细胞、血红蛋白、血小板等指标"
     )
     gender: str = Field(
         default="unknown",
-        description="患者性别：male（男）、female（女）或 unknown（未知）"
+        description="患者性别：male（男）、female（女）或 unknown（未知）",
     )
 
 
 class BiochemistryReportInput(BaseModel):
     """血生化报告分析输入参数"""
+
     report_text: str = Field(
         description="血生化检查报告文本，包含血糖、肌酐、ALT/AST等指标"
     )
     gender: str = Field(
         default="unknown",
-        description="患者性别：male（男）、female（女）或 unknown（未知）"
+        description="患者性别：male（男）、female（女）或 unknown（未知）",
     )
 
 
 class UrinalysisReportInput(BaseModel):
     """尿常规报告分析输入参数"""
+
     report_text: str = Field(
         description="尿常规检查报告文本，包含尿蛋白、尿糖、尿潜血等指标"
     )
@@ -147,26 +145,24 @@ class UrinalysisReportInput(BaseModel):
 
 class VitalSignsInput(BaseModel):
     """生命体征分析输入参数（4 项核心指标）"""
+
     temperature: Optional[float] = Field(
-        default=None,
-        description="体温（摄氏度），正常范围 36.0-37.3"
+        default=None, description="体温（摄氏度），正常范围 36.0-37.3"
     )
     heart_rate: Optional[float] = Field(
-        default=None,
-        description="心率（次/分），正常范围 60-100"
+        default=None, description="心率（次/分），正常范围 60-100"
     )
     systolic_bp: Optional[float] = Field(
-        default=None,
-        description="收缩压（mmHg），正常范围 90-140"
+        default=None, description="收缩压（mmHg），正常范围 90-140"
     )
     diastolic_bp: Optional[float] = Field(
-        default=None,
-        description="舒张压（mmHg），正常范围 60-90"
+        default=None, description="舒张压（mmHg），正常范围 60-90"
     )
 
 
 class SymptomInput(BaseModel):
     """症状分析输入参数"""
+
     symptom_text: str = Field(
         description="患者症状描述文本，如'我最近发烧、咳嗽、头晕'"
     )
@@ -176,74 +172,71 @@ class SymptomInput(BaseModel):
 def analyze_cbc_report(report_text: str, gender: str = "unknown") -> str:
     """
     分析血常规（CBC）报告，识别异常指标并评估风险等级。
-    
+
     适用场景：用户提供了血常规检查报告，需要评估感染、贫血、血液系统疾病风险。
-    
+
     Returns:
         JSON 格式结果，包含：异常指标列表、诊断提示、风险等级（low/medium/high/critical）
     """
     logger.info(f"开始分析血常规报告，性别: {gender}")
-    
+
     try:
         gender_enum = _gender_from_str(gender)
         result = cbc_analyzer.analyze(report_text, gender_enum)
         return _result_to_json(result, "cbc")
     except Exception as e:
         logger.error(f"血常规分析失败: {e}")
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "analysis_type": "cbc"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": str(e), "analysis_type": "cbc"},
+            ensure_ascii=False,
+        )
 
 
 @tool("analyze_biochemistry_report", args_schema=BiochemistryReportInput)
 def analyze_biochemistry_report(report_text: str, gender: str = "unknown") -> str:
     """
     分析血生化报告，评估糖尿病、肾功能、肝功能风险。
-    
+
     适用场景：用户提供了血生化检查报告，需要评估糖尿病、肾病、肝病风险。
-    
+
     Returns:
         JSON 格式结果，包含：异常指标、关联性分析、风险等级
     """
     logger.info(f"开始分析血生化报告，性别: {gender}")
-    
+
     try:
         gender_enum = _gender_from_str(gender)
         result = biochemistry_analyzer.analyze(report_text, gender_enum)
         return _result_to_json(result, "biochemistry")
     except Exception as e:
         logger.error(f"血生化分析失败: {e}")
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "analysis_type": "biochemistry"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": str(e), "analysis_type": "biochemistry"},
+            ensure_ascii=False,
+        )
 
 
 @tool("analyze_urinalysis_report", args_schema=UrinalysisReportInput)
 def analyze_urinalysis_report(report_text: str) -> str:
     """
     分析尿常规报告，评估肾病、泌尿系统疾病风险。
-    
+
     适用场景：用户提供了尿常规检查报告，需要评估肾病、泌尿系统感染风险。
-    
+
     Returns:
         JSON 格式结果，包含：异常指标、临床意义、风险等级
     """
     logger.info("开始分析尿常规报告")
-    
+
     try:
         result = urinalysis_analyzer.analyze(report_text)
         return _result_to_json(result, "urinalysis")
     except Exception as e:
         logger.error(f"尿常规分析失败: {e}")
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "analysis_type": "urinalysis"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": str(e), "analysis_type": "urinalysis"},
+            ensure_ascii=False,
+        )
 
 
 @tool("analyze_vital_signs", args_schema=VitalSignsInput)
@@ -251,66 +244,64 @@ def analyze_vital_signs(
     temperature: Optional[float] = None,
     heart_rate: Optional[float] = None,
     systolic_bp: Optional[float] = None,
-    diastolic_bp: Optional[float] = None
+    diastolic_bp: Optional[float] = None,
 ) -> str:
     """
     分析生命体征数据（4 项核心指标），评估发热、高血压等风险。
-    
+
     适用场景：用户提供了体温、血压等生命体征数据，需要评估各项指标是否正常。
-    
+
     Args:
         temperature: 体温（℃）
         heart_rate: 心率（次/分）
         systolic_bp: 收缩压（mmHg）
         diastolic_bp: 舒张压（mmHg）
-    
+
     Returns:
         JSON 格式结果，包含：异常指标、诊断提示、风险等级
-    
+
     Raises:
         无：所有异常均已内部处理
     """
     logger.info("开始分析生命体征")
-    
+
     try:
         result = vital_signs_analyzer.analyze_vital_signs(
             temperature=temperature,
             heart_rate=heart_rate,
             systolic_bp=systolic_bp,
-            diastolic_bp=diastolic_bp
+            diastolic_bp=diastolic_bp,
         )
         return _result_to_json(result, "vital_signs")
     except Exception as e:
         logger.error(f"生命体征分析失败：{e}")
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "analysis_type": "vital_signs"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": str(e), "analysis_type": "vital_signs"},
+            ensure_ascii=False,
+        )
 
 
 @tool("analyze_symptoms", args_schema=SymptomInput)
 def analyze_symptoms(symptom_text: str) -> str:
     """
     分析症状文本，识别关键症状并评估紧急程度。
-    
+
     适用场景：用户描述了自己的症状，需要提取关键症状并评估紧急程度。
-    
+
     Returns:
         JSON 格式结果，包含：检测到的症状、紧急程度、相关指标
     """
     logger.info("开始分析症状文本")
-    
+
     try:
         result = symptom_analyzer.analyze_symptoms(symptom_text)
         return _result_to_json(result, "symptom")
     except Exception as e:
         logger.error(f"症状分析失败: {e}")
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "analysis_type": "symptom"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"success": False, "error": str(e), "analysis_type": "symptom"},
+            ensure_ascii=False,
+        )
 
 
 def get_medical_tools() -> List:

@@ -32,6 +32,7 @@ def _check_psycopg_pool() -> bool:
     """
     try:
         from psycopg_pool import ConnectionPool
+
         return True
     except ImportError:
         logger.warning(
@@ -232,6 +233,7 @@ class DatabaseConnectionPool:
             if _pool_instance is None:
                 if db_uri is None:
                     from utils.config import Config
+
                     db_uri = Config.DB_URI
 
                 _pool_instance = cls(

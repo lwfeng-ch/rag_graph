@@ -13,7 +13,7 @@
     from utils.logger import setup_logger
     logger = setup_logger(__name__)
     logger.info("日志消息")
-    
+
 完整数据流：
     调用 setup_logger("rag.agent")
         │
@@ -38,6 +38,7 @@
         └─→ FileHandler   → 写入 logs/app.log
                                 └─→ 超过10MB → 轮转
 """
+
 import os
 import logging
 import logging.config
@@ -45,10 +46,12 @@ from typing import Optional
 
 try:
     from concurrent_log_handler import ConcurrentRotatingFileHandler
-    _HAS_CONCURRENT_HANDLER = True   # 标记：支持多进程安全写入
+
+    _HAS_CONCURRENT_HANDLER = True  # 标记：支持多进程安全写入
 except ImportError:
     from logging.handlers import RotatingFileHandler
-    _HAS_CONCURRENT_HANDLER = False   # 降级：使用标准库的 RotatingFileHandler
+
+    _HAS_CONCURRENT_HANDLER = False  # 降级：使用标准库的 RotatingFileHandler
 
 
 LOG_DIR = "logs"
@@ -103,37 +106,39 @@ def setup_logger(
         >>> logger.info("这是一条日志消息")
     """
     logger = logging.getLogger(name)  # 从全局注册表获取Logger实例
-    
+
     if logger.handlers:
         return logger
-    
+
     if level is None:
         level = _get_log_level()
-    
+
     logger.setLevel(level)
-    
+
     formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
-    
+
     console_handler = logging.StreamHandler()  # 输出到 stderr（默认）
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
+
     log_dir = log_dir or LOG_DIR
     log_file = log_file or LOG_FILE
-    
+
     if not os.path.exists(log_dir):
         try:
-            os.makedirs(log_dir, exist_ok=True)  # exist_ok=True：并发时多进程同时创建不会报错
+            os.makedirs(
+                log_dir, exist_ok=True
+            )  # exist_ok=True：并发时多进程同时创建不会报错
         except (OSError, PermissionError) as e:
             logger.warning(f"无法创建日志目录 {log_dir}: {e}")
             return logger  # ← 降级处理：仅保留控制台输出处理器，不崩溃
-    
+
     log_path = os.path.join(log_dir, log_file)
-    
+
     try:
         if _HAS_CONCURRENT_HANDLER:
-             # 多进程安全
+            # 多进程安全
             file_handler = ConcurrentRotatingFileHandler(
                 log_path,
                 maxBytes=LOG_MAX_BYTES,
@@ -153,7 +158,7 @@ def setup_logger(
         logger.addHandler(file_handler)
     except (OSError, PermissionError) as e:
         logger.warning(f"无法创建日志文件处理器: {e}")
-    
+
     return logger
 
 

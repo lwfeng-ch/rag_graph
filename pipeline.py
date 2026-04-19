@@ -8,6 +8,7 @@
 2. 分步处理: convert_files() → split_documents() → vectorize()
 3. 单独使用各组件: MinerUClient / MarkdownSplitter / VectorStoreV2
 """
+
 import os
 import logging
 from pathlib import Path
@@ -30,7 +31,7 @@ class Pipeline:
         output_dir: str = None,
         mineru_api_url: str = None,
         collection_name: str = None,
-        clear_existing: bool = False
+        clear_existing: bool = False,
     ):
         """
         初始化流水线。
@@ -58,7 +59,7 @@ class Pipeline:
         input_dir: str = None,
         output_dir: str = None,
         parse_method: str = None,
-        skip_cache: bool = False
+        skip_cache: bool = False,
     ) -> Dict[str, str]:
         """
         步骤1: 批量转换文件为 Markdown。
@@ -81,7 +82,7 @@ class Pipeline:
             input_dir=input_dir,
             output_dir=output_dir,
             parse_method=parse_method,
-            skip_existing=not skip_cache
+            skip_existing=not skip_cache,
         )
 
         success_count = sum(1 for v in results.values() if v)
@@ -90,9 +91,7 @@ class Pipeline:
         return results
 
     def split_documents(
-        self,
-        markdown_contents: Dict[str, str] = None,
-        markdown_dir: str = None
+        self, markdown_contents: Dict[str, str] = None, markdown_dir: str = None
     ) -> List[Dict[str, Any]]:
         """
         步骤2: 对 Markdown 文档执行两阶段语义切分。
@@ -105,28 +104,24 @@ class Pipeline:
             List[Dict]: 所有切分后的 chunks
         """
         documents = []
-        
+
         # 优先处理传入的 Markdown 内容
         if markdown_contents:
             for filename, content in markdown_contents.items():
                 if content:
                     documents.append({"filename": filename, "content": content})
         elif markdown_dir:
-            md_dir = Path(markdown_dir) if isinstance(markdown_dir, str) else markdown_dir
+            md_dir = (
+                Path(markdown_dir) if isinstance(markdown_dir, str) else markdown_dir
+            )
             for md_file in md_dir.glob("*.md"):
                 with open(md_file, "r", encoding="utf-8") as f:
-                    documents.append({
-                        "filename": md_file.stem,
-                        "content": f.read()
-                    })
+                    documents.append({"filename": md_file.stem, "content": f.read()})
         else:
             md_dir = Path(self.output_dir)
             for md_file in md_dir.glob("*.md"):
                 with open(md_file, "r", encoding="utf-8") as f:
-                    documents.append({
-                        "filename": md_file.stem,
-                        "content": f.read()
-                    })
+                    documents.append({"filename": md_file.stem, "content": f.read()})
 
         chunks = self.splitter.split_documents(documents)
         logger.info(f"文档切分完成: {len(documents)} 个文档 → {len(chunks)} 个 chunks")
@@ -134,9 +129,7 @@ class Pipeline:
         return chunks
 
     def vectorize(
-        self,
-        chunks: List[Dict[str, Any]],
-        use_context_prefix: bool = True
+        self, chunks: List[Dict[str, Any]], use_context_prefix: bool = True
     ) -> List[str]:
         """
         步骤3: 向量化并存储到 Qdrant。
@@ -160,25 +153,20 @@ class Pipeline:
             {
                 "filename": chunk.get("filename", ""),
                 "source": chunk.get("source_filename", chunk.get("filename", "")),
-                **chunk.get("metadata", {})
+                **chunk.get("metadata", {}),
             }
             for chunk in chunks
         ]
 
         ids = self.vector_store.upsert_with_metadata(
-            texts=texts,
-            metadatas=metadatas,
-            use_context_prefix=use_context_prefix
+            texts=texts, metadatas=metadatas, use_context_prefix=use_context_prefix
         )
 
         logger.info(f"向量化完成: {len(ids)} 条数据已写入")
         return ids
 
     def run(
-        self,
-        input_dir: str = None,
-        output_dir: str = None,
-        parse_method: str = None
+        self, input_dir: str = None, output_dir: str = None, parse_method: str = None
     ) -> Dict[str, Any]:
         """
         端到端执行完整流水线。
@@ -233,7 +221,7 @@ def quick_build(
     file_path: str = None,
     directory: str = None,
     mineru_url: str = None,
-    query: str = None
+    query: str = None,
 ):
     """
     快速构建知识库并可选执行测试搜索。
@@ -244,10 +232,7 @@ def quick_build(
         mineru_url: MinerU 服务地址
         query: 测试查询（可选）
     """
-    builder = KnowledgeBaseBuilder(
-        mineru_api_url=mineru_url,
-        clear_existing=True
-    )
+    builder = KnowledgeBaseBuilder(mineru_api_url=mineru_url, clear_existing=True)
 
     if file_path and os.path.exists(file_path):
         result = builder.build_from_file(file_path)
@@ -273,8 +258,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 
     print("=" * 60)
@@ -313,13 +297,16 @@ if __name__ == "__main__":
         print(f"切分结果: {len(chunks)} 个 chunks")
         for i, c in enumerate(chunks[:3]):
             meta = c.get("metadata", {})
-            print(f"  Chunk#{i+1}: h1={meta.get('h1','-')} h2={meta.get('h2','-')} len={len(c['content'])}")
+            print(
+                f"  Chunk#{i+1}: h1={meta.get('h1','-')} h2={meta.get('h2','-')} len={len(c['content'])}"
+            )
 
         print("\n--- 流水线分步自测 (使用模拟数据) ---")
         pipeline = Pipeline(collection_name="test_pipeline_selfcheck")
 
         mock_docs = {
-            "test_doc.md": "# 测试\n\n## 内容\n\n这是模拟的Markdown内容用于测试流水线。" * 10,
+            "test_doc.md": "# 测试\n\n## 内容\n\n这是模拟的Markdown内容用于测试流水线。"
+            * 10,
             "sample.md": "# 样例\n\n## 数据\n\n另一份模拟文档。" * 8,
         }
         chunks = pipeline.split_documents(markdown_contents=mock_docs)

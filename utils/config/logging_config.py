@@ -6,6 +6,7 @@
 - 管理日志相关配置
 - 提供日志初始化方法
 """
+
 import logging
 import os
 
@@ -33,16 +34,17 @@ class LoggingConfig:
         """
         try:
             from utils.logger import setup_logger
+
             setup_logger(
                 name="root",
                 log_file=cls.LOG_FILE,
                 level=cls.LOG_LEVEL,
                 max_bytes=cls.MAX_BYTES,
-                backup_count=cls.BACKUP_COUNT
+                backup_count=cls.BACKUP_COUNT,
             )
         except ImportError:
             logging.basicConfig(
                 level=cls.LOG_LEVEL,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                force=True
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                force=True,
             )

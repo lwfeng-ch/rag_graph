@@ -4,6 +4,7 @@ MinerU 远程 API 客户端
 支持多种 API 端点自动探测，兼容 MinerU 不同版本
 提供文件转换、批量处理、健康检查等功能
 """
+
 import os
 import time
 import json
@@ -16,7 +17,7 @@ from utils.config import Config
 
 logger = logging.getLogger(__name__)
 
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
 
 # 文件扩展名到 MIME 类型的映射
 MIME_TYPE_MAP = {
@@ -68,10 +69,7 @@ class MinerUClient:
             bool: True=可用, False=不可用
         """
         try:
-            resp = self._session.get(
-                f"{self.api_url}/health",
-                timeout=10
-            )
+            resp = self._session.get(f"{self.api_url}/health", timeout=10)
             # 如果状态码是200，则认为服务可用
             if resp.status_code == 200:
                 logger.info(f"MinerU 服务健康: {resp.json()}")
@@ -86,10 +84,7 @@ class MinerUClient:
             return self._convert_endpoint
 
         try:
-            resp = self._session.get(
-                f"{self.api_url}/openapi.json",
-                timeout=10
-            )
+            resp = self._session.get(f"{self.api_url}/openapi.json", timeout=10)
             if resp.status_code == 200:
                 schema = resp.json()
                 paths = schema.get("paths", {})
@@ -114,11 +109,13 @@ class MinerUClient:
                 resp = self._session.post(
                     f"{self.api_url}{endpoint}",
                     files={"file": ("test.pdf", test_file_content, "application/pdf")},
-                    timeout=15
+                    timeout=15,
                 )
                 if resp.status_code not in (404, 405):
                     self._convert_endpoint = endpoint
-                    logger.info(f"探测到可用端点: {endpoint} (status={resp.status_code})")
+                    logger.info(
+                        f"探测到可用端点: {endpoint} (status={resp.status_code})"
+                    )
                     return endpoint
             except Exception:
                 continue
@@ -137,7 +134,7 @@ class MinerUClient:
         file_path: str,
         parse_method: str = None,
         return_images: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         上传文件到 MinerU 进行转换，返回 Markdown 结果。
@@ -191,10 +188,7 @@ class MinerUClient:
             for attempt in range(max_retries):
                 try:
                     resp = self._session.post(
-                        url,
-                        files=files,
-                        data=data,
-                        timeout=self.timeout
+                        url, files=files, data=data, timeout=self.timeout
                     )
                     resp.raise_for_status()
                     result = resp.json()
@@ -202,7 +196,9 @@ class MinerUClient:
 
                 except requests.exceptions.HTTPError as e:
                     if resp.status_code == 409 and attempt < max_retries - 1:
-                        logger.warning(f"服务器繁忙 (409)，{retry_delay}s 后重试 ({attempt + 1}/{max_retries})")
+                        logger.warning(
+                            f"服务器繁忙 (409)，{retry_delay}s 后重试 ({attempt + 1}/{max_retries})"
+                        )
                         time.sleep(retry_delay)
                         retry_delay *= 2
                         continue
@@ -224,10 +220,7 @@ class MinerUClient:
 
     # 轮询异步任务结果
     def _poll_async_result(
-        self,
-        initial_response: dict,
-        poll_interval: int = 3,
-        max_wait: int = None
+        self, initial_response: dict, poll_interval: int = 3, max_wait: int = None
     ) -> Dict[str, Any]:
         """轮询异步任务结果"""
         task_id = initial_response.get("task_id") or initial_response.get("id")
@@ -249,10 +242,7 @@ class MinerUClient:
         while time.time() - start_time < max_wait:
             for ep in result_endpoints:
                 try:
-                    resp = self._session.get(
-                        f"{self.api_url}{ep}",
-                        timeout=10
-                    )
+                    resp = self._session.get(f"{self.api_url}{ep}", timeout=10)
                     if resp.status_code == 200:
                         result = resp.json()
                         status = result.get("status", "").lower()
@@ -291,7 +281,9 @@ class MinerUClient:
 
         if "results" in result:
             doc_name = Path(filename).stem
-            doc_result = result["results"].get(doc_name, result["results"].get(filename, {}))
+            doc_result = result["results"].get(
+                doc_name, result["results"].get(filename, {})
+            )
             markdown = doc_result.get("md_content", "")
             images = doc_result.get("images", {})
             content_list = doc_result.get("content_list", "")
@@ -302,11 +294,11 @@ class MinerUClient:
             }
         else:
             markdown = (
-                result.get("markdown") or
-                result.get("data") or
-                result.get("result") or
-                result.get("text") or
-                ""
+                result.get("markdown")
+                or result.get("data")
+                or result.get("result")
+                or result.get("text")
+                or ""
             )
             images = result.get("images", {})
             if not images and "data" in result and isinstance(result["data"], dict):
@@ -318,7 +310,7 @@ class MinerUClient:
             "markdown": markdown,
             "images": images,
             "metadata": metadata,
-            "filename": filename
+            "filename": filename,
         }
 
     def convert_directory(
@@ -326,7 +318,7 @@ class MinerUClient:
         input_dir: str = None,
         output_dir: str = None,
         parse_method: str = None,
-        skip_existing: bool = True
+        skip_existing: bool = True,
     ) -> Dict[str, str]:
         """
         批量转换目录下所有支持格式的文件。
@@ -354,7 +346,7 @@ class MinerUClient:
 
         for file_path in files_to_process:
             md_file = output_dir / f"{file_path.stem}.md"
-            
+
             # 检查是否已有缓存, 如果有则跳过
             logger.info(f"检查缓存: {md_file}")
             if skip_existing and md_file.exists():
@@ -362,7 +354,7 @@ class MinerUClient:
                 with open(md_file, "r", encoding="utf-8") as f:
                     results[file_path.name] = f.read()
                 continue
-            
+
             # 转换文件, 并保存缓存
             logger.info(f"开始转换: {file_path.name}")
             result = self.convert_file(str(file_path), parse_method=parse_method)
@@ -384,8 +376,7 @@ if __name__ == "__main__":
     import logging
 
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 
     client = MinerUClient()

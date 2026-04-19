@@ -7,12 +7,22 @@ FastAPI API 服务入口 — 适配 ragAgent_copy.py 双路由架构（General R
 - 消费 final_payload（安全警告、免责声明、分诊建议）
 - 流式/非流式均兼容 general 和 medical 两条业务线路
 """
+
 import os
 import re
 import json
 from contextlib import asynccontextmanager
 from typing import List, Tuple
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Query, Form, Header
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Depends,
+    UploadFile,
+    File,
+    Query,
+    Form,
+    Header,
+)
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -35,7 +45,7 @@ from utils.auth import get_current_user_id, AuthConfig
 from utils.user_medical_store import get_user_medical_store
 from utils.document_processor import get_document_processor
 
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
 
 logger = setup_logger(__name__)
 
@@ -44,6 +54,7 @@ logger = setup_logger(__name__)
 class Message(BaseModel):
     role: str
     content: str
+
 
 #   聊天请求模型
 class ChatCompletionRequest(BaseModel):
@@ -66,6 +77,7 @@ class TriageData(BaseModel):
     urgency_level: str = "routine"
     triage_reason: str = ""
     triage_confidence: float = 0.8
+
 
 #   结构化医疗数据模型
 class StructuredMedicalData(BaseModel):
@@ -90,22 +102,23 @@ class ChatCompletionResponse(BaseModel):
     system_fingerprint: Optional[str] = None
     medical: Optional[MedicalExtension] = None
 
+
 #   文本格式化模型
 def format_response(response: str) -> str:
     """对输入的文本进行段落分隔、添加适当的换行符。"""
-    paragraphs = re.split(r'\n{2,}', response)
+    paragraphs = re.split(r"\n{2,}", response)
     formatted_paragraphs = []
     for para in paragraphs:
-        if '```' in para:
-            parts = para.split('```')
+        if "```" in para:
+            parts = para.split("```")
             for i, part in enumerate(parts):
                 if i % 2 == 1:
                     parts[i] = f"\n```\n{part.strip()}\n```\n"
-            para = ''.join(parts)
+            para = "".join(parts)
         else:
-            para = para.replace('. ', '.\n')
+            para = para.replace(". ", ".\n")
         formatted_paragraphs.append(para.strip())
-    return '\n\n'.join(formatted_paragraphs)
+    return "\n\n".join(formatted_paragraphs)
 
 
 # 全局变量
@@ -126,7 +139,7 @@ async def lifespan(app: FastAPI):
         medical_tools = get_medical_agent_tools_with_user_docs(
             llm_embedding=llm_embedding,
             llm_type=Config.LLM_TYPE,
-            include_user_docs=True
+            include_user_docs=True,
         )
         tool_config = ToolConfig(rag_tools=rag_tools, medical_tools=medical_tools)
 
@@ -257,7 +270,7 @@ async def handle_non_stream_response(user_input: str, graph, config: dict):
             ChatCompletionResponseChoice(
                 index=0,
                 message=Message(role="assistant", content=formatted_text),
-                finish_reason="stop"
+                finish_reason="stop",
             )
         ]
 
@@ -267,13 +280,17 @@ async def handle_non_stream_response(user_input: str, graph, config: dict):
         logger.error(f"非流式响应提取失败: {ree.to_dict()}")
         raise HTTPException(
             status_code=502,
-            detail={"error": "响应提取失败", "code": ree.code, "message": ree.message}
+            detail={"error": "响应提取失败", "code": ree.code, "message": ree.message},
         )
     except RagAgentError as rae:
         logger.error(f"RagAgent 异常 [{rae.code}]: {rae.message}")
         raise HTTPException(
             status_code=500,
-            detail={"error": "Agent 处理异常", "code": rae.code, "message": rae.message}
+            detail={
+                "error": "Agent 处理异常",
+                "code": rae.code,
+                "message": rae.message,
+            },
         )
 
 
@@ -286,23 +303,38 @@ async def handle_stream_response(user_input: str, graph, config: dict):
 
         try:
             stream_data = graph.stream(
-                {"messages": [{"role": "user", "content": user_input}], "rewrite_count": 0},
+                {
+                    "messages": [{"role": "user", "content": user_input}],
+                    "rewrite_count": 0,
+                },
                 config,
                 stream_mode=["messages", "values"],
             )
         except Exception as e:
             logger.error(f"流式请求启动失败: {e}", exc_info=True)
             error_chunk = {
-                'id': chunk_id,
-                'object': 'chat.completion.chunk',
-                'created': int(time.time()),
-                'choices': [{'index': 0, 'delta': {'content': f'[ERROR] 流式请求启动失败: {str(e)}'}, 'finish_reason': None}]
+                "id": chunk_id,
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": f"[ERROR] 流式请求启动失败: {str(e)}"},
+                        "finish_reason": None,
+                    }
+                ],
             }
             yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
             return
 
-        medical_nodes = {"medical_agent", "medical_analysis", "department_triage", "medical_safety_guard", "generate"}
+        medical_nodes = {
+            "medical_agent",
+            "medical_analysis",
+            "department_triage",
+            "medical_safety_guard",
+            "generate",
+        }
         general_nodes = {"agent", "generate"}
         all_valid_nodes = medical_nodes | general_nodes
         final_payload_collected: Optional[Dict] = None
@@ -317,41 +349,63 @@ async def handle_stream_response(user_input: str, graph, config: dict):
                     if event_type == "messages":
                         message_chunk, metadata = event_data
                         node_name = metadata.get("langgraph_node") if metadata else None
-                        chunk = getattr(message_chunk, 'content', '')
+                        chunk = getattr(message_chunk, "content", "")
 
                         if node_name in all_valid_nodes and chunk:
                             logger.debug(f"Stream [{node_name}]: {chunk[:120]}")
                             data = {
-                                'id': chunk_id,
-                                'object': 'chat.completion.chunk',
-                                'created': int(time.time()),
-                                'choices': [{'index': 0, 'delta': {'content': chunk}, 'finish_reason': None}]
+                                "id": chunk_id,
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"content": chunk},
+                                        "finish_reason": None,
+                                    }
+                                ],
                             }
                             yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
                     elif event_type == "values":
-                        if isinstance(event_data, dict) and "final_payload" in event_data:
+                        if (
+                            isinstance(event_data, dict)
+                            and "final_payload" in event_data
+                        ):
                             final_payload_collected = event_data["final_payload"]
                             if final_payload_collected:
-                                route = final_payload_collected.get('route', 'unknown')
-                                logger.info(f"流式模式检测到 final_payload，route={route}")
+                                route = final_payload_collected.get("route", "unknown")
+                                logger.info(
+                                    f"流式模式检测到 final_payload，route={route}"
+                                )
 
             except Exception as e:
                 error_count += 1
-                logger.error(f"Stream chunk error ({error_count}/{MAX_STREAM_ERRORS}): {e}")
+                logger.error(
+                    f"Stream chunk error ({error_count}/{MAX_STREAM_ERRORS}): {e}"
+                )
                 if error_count >= MAX_STREAM_ERRORS:
                     logger.error(f"流式错误超过阈值 {MAX_STREAM_ERRORS}，终止流")
                     break
                 continue
 
-        if final_payload_collected and final_payload_collected.get("route") == "medical":
+        if (
+            final_payload_collected
+            and final_payload_collected.get("route") == "medical"
+        ):
             medical_ext = _build_medical_extension(final_payload_collected)
             if medical_ext:
                 medical_event = {
-                    'id': chunk_id,
-                    'object': 'chat.completion.chunk',
-                    'created': int(time.time()),
-                    'choices': [{'index': 0, 'delta': {'medical': medical_ext.model_dump()}, 'finish_reason': None}]
+                    "id": chunk_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"medical": medical_ext.model_dump()},
+                            "finish_reason": None,
+                        }
+                    ],
                 }
                 yield f"data: {json.dumps(medical_event, ensure_ascii=False)}\n\n"
                 logger.info("流式模式已发送医疗扩展信息")
@@ -369,7 +423,7 @@ async def get_dependencies() -> Tuple[Any, Any]:
         raise HTTPException(status_code=503, detail="图谱未初始化，服务不可用")
     if not tool_config:
         raise HTTPException(status_code=503, detail="工具配置未初始化")
-    if not hasattr(graph, 'invoke'):
+    if not hasattr(graph, "invoke"):
         raise HTTPException(status_code=500, detail="图谱实例异常（缺少 invoke 方法）")
     return graph, tool_config
 
@@ -386,12 +440,12 @@ async def chat_completions(
 ):
     """
     聊天完成端点
-    
+
     认证方式：
     1. API Key（Header: X-API-Key）- 服务间调用
     2. JWT Token（Header: Authorization）- 前端用户
     3. 开发模式（请求体 userId）- 仅开发环境
-    
+
     安全约束：
     - user_id 必须从认证体系获取，不能从请求体直接读取
     - 防止用户伪造 user_id 查询其他用户数据
@@ -399,7 +453,9 @@ async def chat_completions(
     try:
         g, tc = dependencies
         if not request.messages or not request.messages[-1].content:
-            raise HTTPException(status_code=400, detail="Messages cannot be empty or invalid")
+            raise HTTPException(
+                status_code=400, detail="Messages cannot be empty or invalid"
+            )
 
         user_input = request.messages[-1].content
         logger.info(f"User input: {user_input}")
@@ -408,9 +464,9 @@ async def chat_completions(
         user_id = get_current_user_id(
             x_api_key=x_api_key,
             authorization=authorization,
-            request_user_id=request.userId
+            request_user_id=request.userId,
         )
-        
+
         conversation_id = request.conversationId or "default"
 
         config = {
@@ -429,12 +485,22 @@ async def chat_completions(
         raise
     except ResponseExtractionError as ree:
         logger.error(f"聊天完成响应提取失败: {ree.to_dict()}")
-        raise HTTPException(status_code=502, detail={"error": "响应提取失败", "code": ree.code, "message": ree.message})
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "响应提取失败", "code": ree.code, "message": ree.message},
+        )
     except RagAgentError as rae:
-        logger.error(f"聊天完成 RagAgent 异常 [{rae.code}]: {rae.message}", exc_info=True)
+        logger.error(
+            f"聊天完成 RagAgent 异常 [{rae.code}]: {rae.message}", exc_info=True
+        )
         raise HTTPException(
             status_code=500,
-            detail={"error": "Agent 处理异常", "code": rae.code, "message": rae.message, "details": rae.details}
+            detail={
+                "error": "Agent 处理异常",
+                "code": rae.code,
+                "message": rae.message,
+                "details": rae.details,
+            },
         )
     except Exception as e:
         logger.error(f"Error handling chat completion: {e}", exc_info=True)
@@ -445,8 +511,10 @@ async def chat_completions(
 # 文档管理 API
 # ============================================================
 
+
 class DocumentUploadResponse(BaseModel):
     """文档上传响应"""
+
     success: bool
     file_md5: Optional[str] = None
     filename: Optional[str] = None
@@ -458,6 +526,7 @@ class DocumentUploadResponse(BaseModel):
 
 class DocumentInfo(BaseModel):
     """文档信息"""
+
     doc_id: str
     filename: str
     doc_type: str
@@ -468,6 +537,7 @@ class DocumentInfo(BaseModel):
 
 class DocumentListResponse(BaseModel):
     """文档列表响应"""
+
     user_id: str
     total: int
     documents: List[DocumentInfo]
@@ -475,6 +545,7 @@ class DocumentListResponse(BaseModel):
 
 class DocumentDeleteResponse(BaseModel):
     """文档删除响应"""
+
     success: bool
     file_md5: str
     deleted_chunks: int
@@ -483,6 +554,7 @@ class DocumentDeleteResponse(BaseModel):
 
 class DocumentStatsResponse(BaseModel):
     """文档统计响应"""
+
     user_id: str
     total_documents: int
     total_chunks: int
@@ -498,19 +570,19 @@ async def upload_document(
 ):
     """
     上传文档
-    
+
     支持的文件类型：
     - PDF (.pdf)
     - Word (.docx)
     - 文本文件 (.txt)
-    
+
     文档类型（doc_type）：
     - health_report: 体检报告
     - medical_record: 病历
     - lab_report: 检验报告
     - prescription: 处方
     - other: 其他
-    
+
     认证方式：
     1. API Key（Header: X-API-Key）
     2. JWT Token（Header: Authorization）
@@ -518,32 +590,29 @@ async def upload_document(
     """
     try:
         # 安全获取 user_id
-        user_id = get_current_user_id(
-            x_api_key=x_api_key,
-            authorization=authorization
-        )
-        
+        user_id = get_current_user_id(x_api_key=x_api_key, authorization=authorization)
+
         # 读取文件内容
         file_content = await file.read()
         filename = file.filename or "unknown"
-        
+
         # 获取 embedding model
         if not llm_embedding:
             raise HTTPException(status_code=503, detail="服务未初始化")
-        
+
         # 获取文档处理器
         processor = get_document_processor(embedding_model=llm_embedding)
-        
+
         # 处理并存储文档
         result = processor.process_and_store(
             user_id=user_id,
             file_content=file_content,
             filename=filename,
-            doc_type=doc_type
+            doc_type=doc_type,
         )
-        
+
         return DocumentUploadResponse(**result)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -560,33 +629,26 @@ async def list_documents(
 ):
     """
     获取文档列表
-    
+
     认证方式：
     1. API Key（Header: X-API-Key）
     2. JWT Token（Header: Authorization）
     """
     try:
         # 安全获取 user_id
-        user_id = get_current_user_id(
-            x_api_key=x_api_key,
-            authorization=authorization
-        )
-        
+        user_id = get_current_user_id(x_api_key=x_api_key, authorization=authorization)
+
         # 获取文档列表
         store = get_user_medical_store()
         documents = store.list_documents(user_id, limit=limit, offset=offset)
-        
+
         # 转换为响应格式
-        doc_infos = [
-            DocumentInfo(**doc) for doc in documents
-        ]
-        
+        doc_infos = [DocumentInfo(**doc) for doc in documents]
+
         return DocumentListResponse(
-            user_id=user_id,
-            total=len(doc_infos),
-            documents=doc_infos
+            user_id=user_id, total=len(doc_infos), documents=doc_infos
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -602,36 +664,28 @@ async def delete_document(
 ):
     """
     删除文档
-    
+
     认证方式：
     1. API Key（Header: X-API-Key）
     2. JWT Token（Header: Authorization）
     """
     try:
         # 安全获取 user_id
-        user_id = get_current_user_id(
-            x_api_key=x_api_key,
-            authorization=authorization
-        )
-        
+        user_id = get_current_user_id(x_api_key=x_api_key, authorization=authorization)
+
         # 删除文档
         store = get_user_medical_store()
         deleted_chunks = store.delete_file(user_id, file_md5)
-        
+
         if deleted_chunks == -1:
             return DocumentDeleteResponse(
-                success=False,
-                file_md5=file_md5,
-                deleted_chunks=0,
-                error="删除失败"
+                success=False, file_md5=file_md5, deleted_chunks=0, error="删除失败"
             )
-        
+
         return DocumentDeleteResponse(
-            success=True,
-            file_md5=file_md5,
-            deleted_chunks=deleted_chunks
+            success=True, file_md5=file_md5, deleted_chunks=deleted_chunks
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -646,29 +700,26 @@ async def get_document_stats(
 ):
     """
     获取文档统计信息
-    
+
     认证方式：
     1. API Key（Header: X-API-Key）
     2. JWT Token（Header: Authorization）
     """
     try:
         # 安全获取 user_id
-        user_id = get_current_user_id(
-            x_api_key=x_api_key,
-            authorization=authorization
-        )
-        
+        user_id = get_current_user_id(x_api_key=x_api_key, authorization=authorization)
+
         # 获取统计信息
         store = get_user_medical_store()
         stats = store.get_collection_stats(user_id)
-        
+
         return DocumentStatsResponse(
             user_id=user_id,
             total_documents=stats.get("total_documents", 0),
             total_chunks=stats.get("total_chunks", 0),
-            doc_types=stats.get("doc_types", {})
+            doc_types=stats.get("doc_types", {}),
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

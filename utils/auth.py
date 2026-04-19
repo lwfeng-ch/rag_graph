@@ -12,6 +12,7 @@
 2. JWT Token（Header: Authorization）- 前端用户
 3. 开发模式（请求体 userId）- 仅开发环境
 """
+
 import os
 import logging
 from typing import Optional
@@ -25,23 +26,26 @@ logger = logging.getLogger(__name__)
 class AuthConfig:
     """
     认证配置类。
-    
+
     Attributes:
         dev_mode: 是否启用开发模式（允许请求体 userId）
         api_keys: 有效的 API Key 列表
         jwt_secret: JWT 密钥
         jwt_algorithm: JWT 加密算法
     """
+
     dev_mode: bool = True
     api_keys: list = None
     jwt_secret: str = None
     jwt_algorithm: str = "HS256"
-    
+
     def __post_init__(self):
         if self.api_keys is None:
             self.api_keys = []
         if self.jwt_secret is None:
-            self.jwt_secret = os.getenv("JWT_SECRET", "dev-secret-key-please-change-in-production")
+            self.jwt_secret = os.getenv(
+                "JWT_SECRET", "dev-secret-key-please-change-in-production"
+            )
 
 
 _auth_config: Optional[AuthConfig] = None
@@ -59,7 +63,7 @@ def get_auth_config() -> AuthConfig:
         dev_mode = os.getenv("AUTH_DEV_MODE", "true").lower() == "true"
         api_keys_str = os.getenv("AUTH_API_KEYS", "")
         api_keys = [k.strip() for k in api_keys_str.split(",") if k.strip()]
-        
+
         _auth_config = AuthConfig(
             dev_mode=dev_mode,
             api_keys=api_keys,
@@ -118,25 +122,28 @@ def _validate_jwt_token(authorization: Optional[str]) -> Optional[str]:
     """
     if not authorization:
         return None
-    
+
     if not authorization.startswith("Bearer "):
         logger.warning("Authorization Header 格式错误，应为 'Bearer <token>'")
         return None
-    
+
     token = authorization[7:]
-    
+
     try:
         import jwt
+
         config = get_auth_config()
-        payload = jwt.decode(token, config.jwt_secret, algorithms=[config.jwt_algorithm])
+        payload = jwt.decode(
+            token, config.jwt_secret, algorithms=[config.jwt_algorithm]
+        )
         user_id = payload.get("user_id") or payload.get("sub")
-        
+
         if user_id:
             return str(user_id)
-        
+
         logger.warning("JWT Token 中未找到 user_id 或 sub 字段")
         return None
-        
+
     except ImportError:
         logger.warning("JWT 库未安装，跳过 JWT 验证。请运行: pip install PyJWT")
         return None
@@ -163,17 +170,17 @@ def _validate_dev_user_id(request_user_id: Optional[str]) -> Optional[str]:
     """
     if not request_user_id:
         return None
-    
+
     config = get_auth_config()
-    
+
     if not config.dev_mode:
         logger.warning("生产环境不允许从请求体获取 user_id")
         return None
-    
+
     if not isinstance(request_user_id, str) or len(request_user_id) == 0:
         logger.warning(f"无效的 userId 格式: {request_user_id}")
         return None
-    
+
     return request_user_id
 
 
@@ -212,19 +219,19 @@ def get_current_user_id(
     if user_id:
         logger.info(f"API Key 认证成功: {user_id}")
         return user_id
-    
+
     user_id = _validate_jwt_token(authorization)
     if user_id:
         logger.info(f"JWT Token 认证成功: {user_id}")
         return user_id
-    
+
     user_id = _validate_dev_user_id(request_user_id)
     if user_id:
         logger.info(f"开发模式认证成功: {user_id}")
         return user_id
-    
+
     logger.error("所有认证方式均失败")
     raise HTTPException(
         status_code=401,
-        detail="未授权：请提供有效的 API Key、JWT Token 或在开发模式下提供 userId"
+        detail="未授权：请提供有效的 API Key、JWT Token 或在开发模式下提供 userId",
     )

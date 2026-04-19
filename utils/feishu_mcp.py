@@ -9,7 +9,7 @@
 
 使用方式：
     from utils.feishu_mcp import feishu_mcp_manager
-    
+
     if feishu_mcp_manager.is_initialized():
         feishu_mcp_manager.add_critical_risk_record(
             user_id="user123",
@@ -20,6 +20,7 @@
 - 飞书 MCP 是可选功能，未配置时不会影响主流程
 - 需要配置环境变量：FEISHU_APP_ID, FEISHU_APP_SECRET
 """
+
 import os
 import logging
 from typing import Dict, Any, Optional
@@ -40,6 +41,7 @@ class FeishuMCPConfig:
         table_id: 数据表 ID
         enabled: 是否启用飞书 MCP
     """
+
     app_id: str = ""
     app_secret: str = ""
     base_id: str = ""
@@ -55,8 +57,10 @@ class FeishuMCPConfig:
             self.base_id = os.getenv("FEISHU_BASE_ID", "")
         if not self.table_id:
             self.table_id = os.getenv("FEISHU_TABLE_ID", "")
-        
-        self.enabled = bool(self.app_id and self.app_secret and self.base_id and self.table_id)
+
+        self.enabled = bool(
+            self.app_id and self.app_secret and self.base_id and self.table_id
+        )
 
 
 class FeishuMCPManager:
@@ -79,7 +83,7 @@ class FeishuMCPManager:
         self.config = config or FeishuMCPConfig()
         self._access_token: Optional[str] = None
         self._initialized = False
-        
+
         if self.config.enabled:
             self._initialize()
 
@@ -92,17 +96,19 @@ class FeishuMCPManager:
         """
         try:
             import requests
-            
-            url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+
+            url = (
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+            )
             headers = {"Content-Type": "application/json"}
             data = {
                 "app_id": self.config.app_id,
                 "app_secret": self.config.app_secret,
             }
-            
+
             response = requests.post(url, headers=headers, json=data, timeout=10)
             result = response.json()
-            
+
             if result.get("code") == 0:
                 self._access_token = result.get("tenant_access_token")
                 self._initialized = True
@@ -111,7 +117,7 @@ class FeishuMCPManager:
             else:
                 logger.warning(f"飞书 MCP 初始化失败: {result.get('msg')}")
                 return False
-                
+
         except ImportError:
             logger.warning("requests 库未安装，飞书 MCP 功能不可用")
             return False
@@ -163,18 +169,18 @@ class FeishuMCPManager:
         if not self._initialized:
             logger.warning("飞书 MCP 未初始化，跳过风险记录上报")
             return False
-        
+
         try:
             import requests
             from datetime import datetime
-            
+
             url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{self.config.base_id}/tables/{self.config.table_id}/records"
-            
+
             headers = {
                 "Authorization": f"Bearer {self._access_token}",
                 "Content-Type": "application/json",
             }
-            
+
             fields = {
                 "用户ID": user_id,
                 "风险等级": risk_data.get("risk_level", "unknown"),
@@ -184,21 +190,21 @@ class FeishuMCPManager:
                 "分诊置信度": risk_data.get("triage_confidence", 0.0),
                 "上报时间": datetime.now().isoformat(),
             }
-            
+
             data = {
                 "fields": fields,
             }
-            
+
             response = requests.post(url, headers=headers, json=data, timeout=10)
             result = response.json()
-            
+
             if result.get("code") == 0:
                 logger.info(f"高危风险记录上报成功: user_id={user_id}")
                 return True
             else:
                 logger.warning(f"高危风险记录上报失败: {result.get('msg')}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"高危风险记录上报异常: {e}", exc_info=True)
             return False
@@ -212,7 +218,7 @@ class FeishuMCPManager:
         """
         if not self.config.enabled:
             return False
-        
+
         return self._initialize()
 
 

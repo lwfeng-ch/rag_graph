@@ -10,6 +10,7 @@
 - RerankRetriever 类已移至 retriever.py
 - 本模块专注于工具创建和配置
 """
+
 import os
 import logging
 from typing import List
@@ -78,7 +79,7 @@ def get_tools(llm_embedding, llm_type: str = "qwen") -> List[BaseTool]:
 
     # 4. 构建精排引擎：调用 llms.py 的工厂方法获取 DashScope 重排器，截取 Top 3
     compressor = get_reranker(llm_type=llm_type, top_n=3)
-    
+
     # 5. 构建两阶段检索器：粗排 → 精排
     final_retriever = RerankRetriever(
         base_retriever=base_retriever,
@@ -96,8 +97,9 @@ def get_tools(llm_embedding, llm_type: str = "qwen") -> List[BaseTool]:
             "输入必须是明确的医学术语、关键词或短语。"
         ),
     )
-    
+
     return [retriever_tool]
+
 
 def get_rag_tools(llm_embedding, llm_type: str = "qwen") -> List[BaseTool]:
     """
@@ -137,9 +139,10 @@ def get_medical_agent_tools_with_user_docs(
         ... )
     """
     base_tools = get_tools(llm_embedding, llm_type)
-    
+
     try:
         from utils.medical_analysis import get_medical_tools
+
         medical_tools = get_medical_tools()
         base_tools.extend(medical_tools)
         logger.info(f"加载医疗分析工具成功，共 {len(medical_tools)} 个")
@@ -147,7 +150,7 @@ def get_medical_agent_tools_with_user_docs(
         logger.warning(f"医疗分析工具模块未找到: {e}，将仅使用基础工具")
     except (AttributeError, TypeError) as e:
         logger.warning(f"医疗分析工具加载配置错误: {e}")
-    
+
     if include_user_docs:
         try:
             user_doc_retriever = _create_user_doc_retriever(llm_embedding)
@@ -165,7 +168,7 @@ def get_medical_agent_tools_with_user_docs(
                 logger.info("用户医疗文档检索工具加载成功")
         except (ImportError, AttributeError, ValueError) as e:
             logger.warning(f"用户医疗文档检索工具加载失败: {e}")
-    
+
     logger.info(f"医疗 Agent 工具列表加载完成，共 {len(base_tools)} 个工具")
     return base_tools
 
@@ -189,9 +192,7 @@ def get_medical_agent_tools(llm_embedding, llm_type: str = "qwen") -> List[BaseT
         >>> print(len(tools))
     """
     return get_medical_agent_tools_with_user_docs(
-        llm_embedding=llm_embedding,
-        llm_type=llm_type,
-        include_user_docs=True
+        llm_embedding=llm_embedding, llm_type=llm_type, include_user_docs=True
     )
 
 
@@ -207,10 +208,10 @@ def _create_user_doc_retriever(llm_embedding) -> BaseRetriever | None:
     """
     try:
         from langchain_qdrant import QdrantVectorStore
-        
+
         os.environ["FASTEMBED_CACHE_PATH"] = os.path.abspath("model/model/sparsemodel")
         sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
-        
+
         qdrant_kwargs = {
             "embedding": llm_embedding,
             "sparse_embedding": sparse_embeddings,
@@ -219,7 +220,7 @@ def _create_user_doc_retriever(llm_embedding) -> BaseRetriever | None:
             "vector_name": "text-dense",
             "sparse_vector_name": "text-sparse",
         }
-        
+
         if Config.QDRANT_URL == ":memory:":
             qdrant_kwargs["location"] = ":memory:"
         elif Config.QDRANT_URL:
@@ -227,27 +228,32 @@ def _create_user_doc_retriever(llm_embedding) -> BaseRetriever | None:
             qdrant_kwargs["api_key"] = getattr(Config, "QDRANT_API_KEY", None)
         else:
             qdrant_kwargs["path"] = Config.QDRANT_LOCAL_PATH
-        
+
         vectorstore = QdrantVectorStore.from_existing_collection(**qdrant_kwargs)
-        
+
         base_retriever = vectorstore.as_retriever(
             search_kwargs={
                 "k": 3,
                 "filter": {
                     "must": [
-                        {"key": "doc_type", "match": {"any": ["health_report", "medical_record", "lab_report"]}}
+                        {
+                            "key": "doc_type",
+                            "match": {
+                                "any": ["health_report", "medical_record", "lab_report"]
+                            },
+                        }
                     ]
-                }
+                },
             }
         )
-        
+
         compressor = get_reranker(llm_type=Config.LLM_TYPE, top_n=2)
-        
+
         return RerankRetriever(
             base_retriever=base_retriever,
             base_compressor=compressor,
         )
-        
+
     except Exception as e:
         logger.error(f"创建用户文档检索器失败: {e}")
         return None

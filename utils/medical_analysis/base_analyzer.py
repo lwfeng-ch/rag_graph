@@ -17,6 +17,7 @@ from .medical_reference import RiskLevel
 
 class AnalysisType(Enum):
     """分析类型枚举"""
+
     CBC = "血常规"
     BIOCHEMISTRY = "血生化"
     URINALYSIS = "尿常规"
@@ -27,6 +28,7 @@ class AnalysisType(Enum):
 @dataclass
 class BaseAnalysisResult:
     """分析结果基类"""
+
     analysis_type: AnalysisType
     abnormal_count: int = 0
     risk_level: RiskLevel = RiskLevel.LOW
@@ -129,10 +131,7 @@ class BaseMedicalAnalyzer(ABC):
             return RiskLevel.CRITICAL
 
     def generate_summary(
-        self,
-        analysis_type: AnalysisType,
-        abnormal_count: int,
-        risk_level: RiskLevel
+        self, analysis_type: AnalysisType, abnormal_count: int, risk_level: RiskLevel
     ) -> str:
         """
         生成分析摘要。

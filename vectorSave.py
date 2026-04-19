@@ -3,6 +3,7 @@
 向量存储引擎 v2 - 增强版
 完整知识库构建链路: 任意格式文件 → MinerU高保真Markdown → 两阶段语义切分 → 带元数据的向量存储
 """
+
 # vectorSave.py
 """
 向量存储引擎 v2 - 增强版
@@ -26,7 +27,7 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
 
 
 class CustomEmbeddings(Embeddings):
@@ -81,14 +82,8 @@ def get_embeddings(texts: List[str]) -> List[List[float]]:
         return []
 
     try:
-        client = OpenAI(
-            base_url=config["base_url"],
-            api_key=config["api_key"]
-        )
-        data = client.embeddings.create(
-            input=texts,
-            model=config["model"]
-        ).data
+        client = OpenAI(base_url=config["base_url"], api_key=config["api_key"])
+        data = client.embeddings.create(input=texts, model=config["model"]).data
         return [item.embedding for item in data]
     except Exception as e:
         logger.error(f"生成向量时出错: {e}")
@@ -103,7 +98,7 @@ def generate_vectors(data: List[str], max_batch_size: int = None) -> List[List[f
     results = []
 
     for i in range(0, len(data), max_batch_size):
-        batch = data[i:i + max_batch_size]
+        batch = data[i : i + max_batch_size]
         response = get_embeddings(batch)
         results.extend(response)
 
@@ -122,7 +117,7 @@ class VectorStoreV2:
         qdrant_url: str = None,
         qdrant_api_key: str = None,
         qdrant_local_path: str = None,
-        use_hybrid: bool = True
+        use_hybrid: bool = True,
     ):
         self.collection_name = collection_name or Config.QDRANT_COLLECTION_NAME
         self.embedding_fn = embedding_fn or generate_vectors
@@ -212,9 +207,8 @@ class VectorStoreV2:
                     self.client.create_collection(
                         collection_name=self.collection_name,
                         vectors_config=qdrant_models.VectorParams(
-                            size=vector_size,
-                            distance=qdrant_models.Distance.COSINE
-                        )
+                            size=vector_size, distance=qdrant_models.Distance.COSINE
+                        ),
                     )
                     logger.info(
                         f"创建 Qdrant 集合：{self.collection_name}, 维度：{vector_size}"
@@ -265,14 +259,11 @@ class VectorStoreV2:
                     "document": doc,
                     "page_content": doc,
                     "source": "unknown",
-                }
+                },
             )
             points.append(point)
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
+        self.client.upsert(collection_name=self.collection_name, points=points)
         logger.info(f"成功添加 {len(points)} 个文档到集合 '{self.collection_name}'")
 
     def upsert_with_metadata(
@@ -280,7 +271,7 @@ class VectorStoreV2:
         texts: List[str],
         metadatas: List[Dict[str, Any]],
         ids: List[str] = None,
-        use_context_prefix: bool = True
+        use_context_prefix: bool = True,
     ) -> List[str]:
         """
         带完整元数据的文档插入（核心方法）。
@@ -313,14 +304,11 @@ class VectorStoreV2:
         # ── 混合检索模式：通过 QdrantVectorStore 写入（自动计算稀疏向量）──
         if self.use_hybrid and self.vectorstore is not None:
             from langchain_core.documents import Document
+
             lc_docs = [
                 Document(
                     page_content=text,
-                    metadata={
-                        "document": text,
-                        "page_content": text,
-                        **metadata
-                    }
+                    metadata={"document": text, "page_content": text, **metadata},
                 )
                 for text, metadata in zip(texts, metadatas)
             ]
@@ -334,27 +322,17 @@ class VectorStoreV2:
         points = []
         for id_, text, embedding, metadata in zip(ids, texts, embeddings, metadatas):
             payload = {"document": text, "page_content": text, **metadata}
-            point = qdrant_models.PointStruct(
-                id=id_,
-                vector=embedding,
-                payload=payload
-            )
+            point = qdrant_models.PointStruct(id=id_, vector=embedding, payload=payload)
             points.append(point)
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
+        self.client.upsert(collection_name=self.collection_name, points=points)
         logger.info(
             f"成功写入 {len(points)} 条数据（含元数据）到 '{self.collection_name}'"
         )
         return ids
 
     def search(
-        self,
-        query: str,
-        top_n: int = 5,
-        query_filter: Dict[str, Any] = None
+        self, query: str, top_n: int = 5, query_filter: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         相似性搜索。
@@ -385,8 +363,7 @@ class VectorStoreV2:
             documents, distances = [], []
             for point in search_results.points:
                 doc_text = point.payload.get(
-                    "document",
-                    point.payload.get("page_content", "")
+                    "document", point.payload.get("page_content", "")
                 )
                 documents.append(doc_text)
                 distances.append(point.score)
@@ -429,22 +406,19 @@ class KnowledgeBaseBuilder:
         collection_name: str = None,
         mineru_api_url: str = None,
         clear_existing: bool = False,
-        use_hybrid: bool = True
+        use_hybrid: bool = True,
     ):
         self.mineru_client = MinerUClient(api_url=mineru_api_url)
         self.splitter = MarkdownSplitter()
         self.vector_store = VectorStoreV2(
-            collection_name=collection_name,
-            use_hybrid=use_hybrid
+            collection_name=collection_name, use_hybrid=use_hybrid
         )
         # ✅ 只在第一次调用前清空一次，后续文件追加写入
         self.clear_existing = clear_existing
         self._cleared = False  # 标记是否已执行过清空
 
     def build_from_file(
-        self,
-        file_path: str,
-        parse_method: str = None
+        self, file_path: str, parse_method: str = None
     ) -> Dict[str, Any]:
         """
         从单个文件构建知识库。
@@ -470,7 +444,7 @@ class KnowledgeBaseBuilder:
             {
                 "filename": result.get("filename", ""),
                 "source": file_path,
-                **chunk.get("metadata", {})
+                **chunk.get("metadata", {}),
             }
             for chunk in chunks
         ]
@@ -485,17 +459,12 @@ class KnowledgeBaseBuilder:
         }
 
     def build_from_directory(
-        self,
-        input_dir: str = None,
-        output_dir: str = None,
-        parse_method: str = None
+        self, input_dir: str = None, output_dir: str = None, parse_method: str = None
     ) -> Dict[str, Any]:
         """从目录批量构建知识库"""
         input_dir = input_dir or Config.INPUT_DIR
         md_results = self.mineru_client.convert_directory(
-            input_dir=input_dir,
-            output_dir=output_dir,
-            parse_method=parse_method
+            input_dir=input_dir, output_dir=output_dir, parse_method=parse_method
         )
 
         all_chunks = []
@@ -516,7 +485,7 @@ class KnowledgeBaseBuilder:
             {
                 "filename": chunk.get("source_filename", ""),
                 "source": chunk.get("source_filename", ""),
-                **chunk.get("metadata", {})
+                **chunk.get("metadata", {}),
             }
             for chunk in all_chunks
         ]
@@ -546,7 +515,7 @@ def vectorStoreSave():
         logger.error(f"输入目录不存在：{input_dir}")
         return
 
-    supported_extensions = ['.pdf', '.docx', '.pptx', '.html', '.htm', '.txt', '.md']
+    supported_extensions = [".pdf", ".docx", ".pptx", ".html", ".htm", ".txt", ".md"]
     files_to_process = [
         os.path.join(input_dir, f)
         for f in os.listdir(input_dir)
@@ -566,7 +535,7 @@ def vectorStoreSave():
 
     builder = KnowledgeBaseBuilder(
         collection_name=Config.QDRANT_COLLECTION_NAME,
-        clear_existing=True   # ✅ 只清空一次，后续文件均追加
+        clear_existing=True,  # ✅ 只清空一次，后续文件均追加
     )
 
     total_chunks = 0
