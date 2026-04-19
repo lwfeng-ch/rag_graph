@@ -1,0 +1,92 @@
+# Docker 构建忽略文件 - 优化版
+# 排除不需要打包到镜像中的文件
+
+# Python 字节码
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git 相关
+.git/
+.gitignore
+.gitattributes
+
+# Docker 相关（避免递归）
+.dockerignore
+
+# 文档文件（生产镜像不需要）
+*.md
+!requirements*.md
+README.md
+ARCHITECTURE.md
+DEPLOYMENT.md
+DOCKER_DEPLOYMENT.md
+项目说明.md
+REQUIREMENTS_*.md
+
+# 测试文件
+test/
+tests/
+*.test.py
+*_test.py
+.pytest_cache/
+
+# 日志文件
+logs/
+*.log
+
+# 环境变量文件
+.env
+.env.*
+!.env.example
+
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# 开发配置文件
+.env.local
+.env.development
+.env.test
+
+# Docker Compose 拆分文件（已整合到主文件）
+docker-compose/*.yml
+
+# 历史备份文件
+.history/
+*_20*.txt
+*_20*.py
+*_20*.md
+*_20*.yml
+
+# 其他大文件
+*.zip
+*.tar.gz
+*.rar
+
+# 模型缓存（应该使用卷挂载）
+.cache/
+models/
+
+# 数据库文件（应该使用卷挂载）
+*.db
+*.sqlite
+*.sqlite3
